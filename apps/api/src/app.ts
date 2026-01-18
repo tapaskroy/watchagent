@@ -10,6 +10,9 @@ import { logger } from './config/logger';
 import { errorHandler } from './middleware/error-handler';
 import { authMiddleware } from './middleware/auth';
 import { authRoutes } from './modules/auth/auth.routes';
+import { contentRoutes } from './modules/content/content.routes';
+import { watchlistRoutes } from './modules/watchlist/watchlist.routes';
+import { ratingsRoutes } from './modules/ratings/ratings.routes';
 
 export async function buildApp(): Promise<FastifyInstance> {
   // Create Fastify instance
@@ -104,10 +107,10 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // Register routes
   await app.register(authRoutes, { prefix: '/api/v1/auth' });
+  await app.register(contentRoutes, { prefix: '/api/v1/content' });
+  await app.register(watchlistRoutes, { prefix: '/api/v1/watchlist' });
+  await app.register(ratingsRoutes, { prefix: '/api/v1/ratings' });
   // await app.register(userRoutes, { prefix: '/api/v1/users' });
-  // await app.register(contentRoutes, { prefix: '/api/v1/content' });
-  // await app.register(watchlistRoutes, { prefix: '/api/v1/watchlist' });
-  // await app.register(ratingRoutes, { prefix: '/api/v1/ratings' });
   // await app.register(recommendationRoutes, { prefix: '/api/v1/recommendations' });
   // await app.register(socialRoutes, { prefix: '/api/v1/social' });
 
