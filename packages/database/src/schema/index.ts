@@ -112,7 +112,6 @@ export const content = pgTable(
     tmdbIdIdx: uniqueIndex('content_tmdb_id_idx').on(table.tmdbId),
     imdbIdIdx: index('content_imdb_id_idx').on(table.imdbId),
     typeIdx: index('content_type_idx').on(table.type),
-    genresIdx: index('content_genres_idx').using('gin', table.genres),
     popularityIdx: index('content_popularity_idx').on(table.popularity),
     releaseDateIdx: index('content_release_date_idx').on(table.releaseDate),
   })

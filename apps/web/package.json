@@ -14,9 +14,9 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@watchagent/shared": "workspace:*",
-    "@watchagent/api-client": "workspace:*",
-    "@watchagent/ui": "workspace:*",
+    "@watchagent/shared": "*",
+    "@watchagent/api-client": "*",
+    "@watchagent/ui": "*",
     "@tanstack/react-query": "^5.14.2",
     "next": "^14.0.4",
     "react": "^18.2.0",
