@@ -35,18 +35,10 @@ export class PreferencesService {
   }
 
   /**
-   * Get user profile with preferences and stats
+   * Sync conversation context to user preferences
+   * This should be called after onboarding completes or when preferences are updated
    */
-  async getUserProfile(userId: string): Promise<UserProfile> {
-    // Get user info
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, userId),
-    });
-
-    if (!user) {
-      throw new AppError(ApiErrorCode.NOT_FOUND, 'User not found', HttpStatus.NOT_FOUND);
-    }
-
+  async syncConversationPreferences(userId: string): Promise<void> {
     // Get or create preferences
     let preferences = await db.query.userPreferences.findFirst({
       where: eq(userPreferences.userId, userId),
@@ -69,7 +61,7 @@ export class PreferencesService {
       preferences = newPrefs;
     }
 
-    // Get latest conversation context and sync to learnedPreferences
+    // Get latest conversation context
     const latestConversation = await db.query.conversations.findFirst({
       where: eq(conversations.userId, userId),
       orderBy: [desc(conversations.updatedAt)],
@@ -81,16 +73,40 @@ export class PreferencesService {
 
       // Sync conversation context to learned preferences if not already synced
       if (JSON.stringify(deduplicatedContext) !== JSON.stringify(preferences.learnedPreferences)) {
-        const [updated] = await db
+        await db
           .update(userPreferences)
           .set({
             learnedPreferences: deduplicatedContext,
             updatedAt: new Date(),
           })
-          .where(eq(userPreferences.userId, userId))
-          .returning();
-        preferences = updated;
+          .where(eq(userPreferences.userId, userId));
       }
+    }
+  }
+
+  /**
+   * Get user profile with preferences and stats
+   */
+  async getUserProfile(userId: string): Promise<UserProfile> {
+    // Get user info
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
+
+    if (!user) {
+      throw new AppError(ApiErrorCode.NOT_FOUND, 'User not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Sync conversation preferences to learned preferences
+    await this.syncConversationPreferences(userId);
+
+    // Get preferences (now guaranteed to exist and be synced)
+    const preferences = await db.query.userPreferences.findFirst({
+      where: eq(userPreferences.userId, userId),
+    });
+
+    if (!preferences) {
+      throw new AppError(ApiErrorCode.NOT_FOUND, 'Preferences not found', HttpStatus.NOT_FOUND);
     }
 
     // Ensure learned preferences are deduplicated in response

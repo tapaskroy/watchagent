@@ -5,6 +5,8 @@ import { eq, and, desc } from 'drizzle-orm';
 import { CLAUDE_MODEL } from '@watchagent/shared';
 import { logError, logDebug, logInfo } from '../../config/logger';
 import { TMDBService } from '../external-apis/tmdb.service';
+import { PreferencesService } from '../preferences/preferences.service';
+import { LLMRecommendationService } from '../recommendation/llm-recommendation.service';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -40,12 +42,16 @@ interface ChatResponse {
 export class ChatService {
   private anthropic: Anthropic;
   private tmdb: TMDBService;
+  private preferencesService: PreferencesService;
+  private recommendationService: LLMRecommendationService;
 
   constructor() {
     this.anthropic = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
     });
     this.tmdb = new TMDBService();
+    this.preferencesService = new PreferencesService();
+    this.recommendationService = new LLMRecommendationService();
   }
 
   /**
@@ -303,6 +309,22 @@ Keep the tone friendly and conversational. Ask open-ended questions that encoura
           updatedAt: new Date(),
         })
         .where(eq(conversations.id, conversationId));
+
+      // Sync conversation preferences to user preferences immediately after onboarding completes
+      if (shouldCompleteOnboarding) {
+        try {
+          // Sync preferences from conversation to user preferences table
+          await this.preferencesService.syncConversationPreferences(userId);
+          logInfo('Synced conversation preferences to user preferences after onboarding', { userId });
+
+          // Generate fresh personalized recommendations based on learned preferences
+          await this.recommendationService.generateRecommendations(userId, true);
+          logInfo('Generated fresh recommendations after onboarding', { userId });
+        } catch (error) {
+          logError(error as Error, { userId, service: 'ChatService.syncAfterOnboarding' });
+          // Don't fail the whole request if sync fails
+        }
+      }
 
       return {
         message: assistantMessage,

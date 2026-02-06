@@ -16,6 +16,7 @@ import {
   RecommendationContext,
   RECOMMENDATION_CONFIG,
   CACHE_TTL,
+  GENRE_NAMES,
 } from '@watchagent/shared';
 import { logError, logDebug, logInfo } from '../../config/logger';
 
@@ -41,6 +42,39 @@ export class LLMRecommendationService {
 
   constructor() {
     this.tmdb = new TMDBService();
+  }
+
+  /**
+   * Helper function to convert genre names to TMDB genre IDs
+   */
+  private genreNamesToIds(genreNames: string[]): number[] {
+    const genreIds: number[] = [];
+    const genreNameMap: Record<string, number> = {};
+
+    // Create reverse mapping from GENRE_NAMES (case-insensitive)
+    Object.entries(GENRE_NAMES).forEach(([id, name]) => {
+      genreNameMap[name.toLowerCase()] = parseInt(id);
+    });
+
+    // Also add common variations and synonyms
+    const synonyms: Record<string, string> = {
+      'sci-fi': 'science fiction',
+      'scifi': 'science fiction',
+      'sf': 'science fiction',
+      'romcom': 'romance',
+      'romantic comedy': 'comedy',
+    };
+
+    genreNames.forEach((name) => {
+      const normalized = name.toLowerCase().trim();
+      const lookupName = synonyms[normalized] || normalized;
+      const id = genreNameMap[lookupName];
+      if (id && !genreIds.includes(id)) {
+        genreIds.push(id);
+      }
+    });
+
+    return genreIds;
   }
 
   /**
@@ -157,6 +191,30 @@ export class LLMRecommendationService {
 
       if (!prefs) return null;
 
+      // Extract and merge learned preferences from conversation
+      const learnedPrefs = (prefs.learnedPreferences as any) || {};
+      const learnedGenreNames = (learnedPrefs.favoriteGenres as string[]) || [];
+      const learnedGenreIds = this.genreNamesToIds(learnedGenreNames);
+      const learnedActors = (learnedPrefs.favoriteActors as string[]) || [];
+
+      // Merge explicit preferences with learned preferences
+      const allGenres = Array.from(
+        new Set([...(prefs.preferredGenres as number[]), ...learnedGenreIds])
+      );
+      const allActors = Array.from(
+        new Set([...(prefs.favoriteActors as string[]), ...learnedActors])
+      );
+
+      logInfo('Merged user preferences for recommendations', {
+        userId,
+        explicitGenres: prefs.preferredGenres,
+        learnedGenres: learnedGenreIds,
+        mergedGenres: allGenres,
+        explicitActors: Array.isArray(prefs.favoriteActors) ? prefs.favoriteActors.length : 0,
+        learnedActors: learnedActors.length,
+        mergedActors: allActors.length,
+      });
+
       // Get recent ratings and watchlist
       const userRatings = await db.query.ratings.findMany({
         where: eq(ratings.userId, userId),
@@ -199,8 +257,8 @@ export class LLMRecommendationService {
 
       return {
         userProfile: {
-          preferredGenres: prefs.preferredGenres as number[],
-          favoriteActors: prefs.favoriteActors as string[],
+          preferredGenres: allGenres,
+          favoriteActors: allActors,
           preferredLanguages: prefs.preferredLanguages as string[],
           contentTypes: prefs.contentTypes as ('movie' | 'tv')[],
         },
