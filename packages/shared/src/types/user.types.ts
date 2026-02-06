@@ -21,6 +21,15 @@ export interface User {
   updatedAt: Date;
 }
 
+// Learned preferences from conversations
+export interface LearnedPreferences {
+  favoriteMovies?: string[];
+  favoriteGenres?: string[];
+  favoriteActors?: string[];
+  dislikes?: string[];
+  moodPreferences?: string[];
+}
+
 // User preferences
 export interface UserPreferences {
   id: string;
@@ -30,6 +39,8 @@ export interface UserPreferences {
   preferredLanguages: string[];
   contentTypes: ('movie' | 'tv')[];
   notificationSettings: NotificationSettings;
+  viewingPreferencesText?: string; // Natural language description of viewing preferences
+  learnedPreferences: LearnedPreferences; // Auto-learned from conversations
   createdAt: Date;
   updatedAt: Date;
 }
@@ -66,6 +77,38 @@ export interface UserStats {
   averageRating: number;
 }
 
+// Liked content item
+export interface LikedContent {
+  id: string;
+  tmdbId: string;
+  type: 'movie' | 'tv';
+  title: string;
+  posterPath?: string;
+  releaseDate?: string;
+  rating: number;
+  userRating: number;
+  ratedAt: Date;
+}
+
+// User profile with preferences and stats
+export interface UserProfile {
+  user: {
+    id: string;
+    username: string;
+    email: string;
+    fullName?: string;
+    bio?: string;
+    avatarUrl?: string;
+  };
+  preferences: UserPreferences;
+  stats: {
+    totalRatings: number;
+    totalWatchlistItems: number;
+    averageRating: number;
+  };
+  likedContent: LikedContent[];
+}
+
 // Authentication types
 export interface AuthTokens {
   accessToken: string;
@@ -88,6 +131,16 @@ export interface RegisterRequest {
 
 export interface RefreshTokenRequest {
   refreshToken: string;
+}
+
+export interface UpdatePreferencesRequest {
+  preferredGenres?: number[];
+  favoriteActors?: string[];
+  preferredLanguages?: string[];
+  contentTypes?: ('movie' | 'tv')[];
+  notificationSettings?: Partial<NotificationSettings>;
+  viewingPreferencesText?: string;
+  learnedPreferences?: LearnedPreferences;
 }
 
 // Zod validators
@@ -136,4 +189,12 @@ export const updatePreferencesSchema = z.object({
       watchlistUpdates: z.boolean().optional(),
     })
     .optional(),
+  viewingPreferencesText: z.string().max(5000).optional(),
+  learnedPreferences: z.object({
+    favoriteMovies: z.array(z.string()).optional(),
+    favoriteGenres: z.array(z.string()).optional(),
+    favoriteActors: z.array(z.string()).optional(),
+    dislikes: z.array(z.string()).optional(),
+    moodPreferences: z.array(z.string()).optional(),
+  }).optional(),
 });

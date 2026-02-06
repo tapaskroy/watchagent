@@ -12,7 +12,7 @@ import {
 } from '@watchagent/shared';
 import { AppError } from '../../middleware/error-handler';
 import { env } from '../../config/env';
-import { CacheService, cacheKeys } from '../../config/redis';
+import { CacheService } from '../../config/redis';
 
 const BCRYPT_ROUNDS = 12;
 

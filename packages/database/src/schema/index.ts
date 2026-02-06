@@ -68,6 +68,8 @@ export const userPreferences = pgTable('user_preferences', {
   preferredLanguages: jsonb('preferred_languages').notNull().default(['en']),
   contentTypes: jsonb('content_types').notNull().default(['movie', 'tv']), // ['movie', 'tv']
   notificationSettings: jsonb('notification_settings').notNull().default({}),
+  viewingPreferencesText: text('viewing_preferences_text'), // User's viewing preferences in natural language
+  learnedPreferences: jsonb('learned_preferences').notNull().default('{}'), // Auto-learned from conversations
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -277,6 +279,28 @@ export const apiCache = pgTable(
   })
 );
 
+// Conversations table for chat history
+export const conversations = pgTable(
+  'conversations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    messages: jsonb('messages').notNull().default([]), // Array of {role, content, timestamp}
+    context: jsonb('context').notNull().default({}), // Learned preferences, current topic
+    isOnboarding: boolean('is_onboarding').notNull().default(false),
+    onboardingCompleted: boolean('onboarding_completed').notNull().default(false),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index('conversations_user_id_idx').on(table.userId),
+    createdAtIdx: index('conversations_created_at_idx').on(table.createdAt),
+    onboardingIdx: index('conversations_onboarding_idx').on(table.userId, table.isOnboarding),
+  })
+);
+
 // Relations
 export const usersRelations = relations(users, ({ many, one }) => ({
   preferences: one(userPreferences, {
@@ -288,6 +312,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   activities: many(activities),
   recommendations: many(recommendations),
   sessions: many(sessions),
+  conversations: many(conversations),
   followers: many(follows, { relationName: 'following' }),
   following: many(follows, { relationName: 'follower' }),
 }));
@@ -367,6 +392,13 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
   }),
 }));
 
+export const conversationsRelations = relations(conversations, ({ one }) => ({
+  user: one(users, {
+    fields: [conversations.userId],
+    references: [users.id],
+  }),
+}));
+
 // Export all types
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -379,3 +411,4 @@ export type Activity = typeof activities.$inferSelect;
 export type Recommendation = typeof recommendations.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type ApiCache = typeof apiCache.$inferSelect;
+export type Conversation = typeof conversations.$inferSelect;

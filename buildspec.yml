@@ -1,0 +1,30 @@
+version: 0.2
+
+# AWS CodeBuild buildspec for building Docker images
+# Builds both API and Web images for linux/amd64 and pushes to ECR
+
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+      - REPOSITORY_API_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/watchagent-prod-api
+      - REPOSITORY_WEB_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/watchagent-prod-web
+      - IMAGE_TAG=latest
+      - echo Build started on `date`
+
+  build:
+    commands:
+      - echo Building API Docker image...
+      - docker build --platform linux/amd64 -t $REPOSITORY_API_URI:$IMAGE_TAG -f apps/api/Dockerfile .
+      - echo Building Web Docker image...
+      - docker build --platform linux/amd64 --build-arg NEXT_PUBLIC_API_URL=https://api.watchagent.tapaskroy.me/api/v1 --build-arg NEXT_PUBLIC_TMDB_IMAGE_BASE=https://image.tmdb.org/t/p -t $REPOSITORY_WEB_URI:$IMAGE_TAG -f apps/web/Dockerfile .
+
+  post_build:
+    commands:
+      - echo Build completed on `date`
+      - echo Pushing API image...
+      - docker push $REPOSITORY_API_URI:$IMAGE_TAG
+      - echo Pushing Web image...
+      - docker push $REPOSITORY_WEB_URI:$IMAGE_TAG
+      - echo Images pushed successfully

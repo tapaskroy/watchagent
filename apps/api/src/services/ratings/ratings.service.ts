@@ -1,5 +1,5 @@
 import { db } from '@watchagent/database';
-import { ratings, content, users } from '@watchagent/database';
+import { ratings } from '@watchagent/database';
 import { eq, and, desc, asc, gte, lte } from 'drizzle-orm';
 import {
   Rating,
@@ -10,7 +10,17 @@ import {
   HttpStatus,
 } from '@watchagent/shared';
 import { AppError } from '../../middleware/error-handler';
-import { CacheService, cacheKeys } from '../../config/redis';
+import { CacheService } from '../../config/redis';
+
+/**
+ * Helper to convert rating from database to proper type
+ */
+function transformRating(rating: any): Rating {
+  return {
+    ...rating,
+    rating: parseFloat(rating.rating),
+  } as Rating;
+}
 
 export class RatingsService {
   /**
@@ -62,7 +72,10 @@ export class RatingsService {
           : [desc(ratings.createdAt)],
     });
 
-    const items = (await query) as Rating[];
+    const rawItems = await query;
+
+    // Transform items to convert rating string to number
+    const items = rawItems.map(transformRating);
 
     // Count total
     const countQuery = await db.query.ratings.findMany({
@@ -122,7 +135,7 @@ export class RatingsService {
       },
     });
 
-    return ratingWithDetails as Rating;
+    return transformRating(ratingWithDetails);
   }
 
   /**
@@ -168,7 +181,7 @@ export class RatingsService {
       },
     });
 
-    return updated as Rating;
+    return transformRating(updated);
   }
 
   /**
@@ -209,6 +222,6 @@ export class RatingsService {
       },
     });
 
-    return rating as Rating | null;
+    return rating ? transformRating(rating) : null;
   }
 }

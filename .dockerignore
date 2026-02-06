@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+# package-lock.json is needed for Docker builds
+yarn.lock
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+coverage/
+.turbo/
+
+# Development
+.git/
+.gitignore
+.vscode/
+.idea/
+*.md
+!README.md
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Testing
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+__tests__/
+__mocks__/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Logs
+logs/
+*.log

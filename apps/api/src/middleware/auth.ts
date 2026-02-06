@@ -2,10 +2,10 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { AppError } from './error-handler';
 import { ApiErrorCode, HttpStatus } from '@watchagent/shared';
 
-// Extend FastifyRequest to include user
-declare module 'fastify' {
-  interface FastifyRequest {
-    user?: {
+// Extend @fastify/jwt user type
+declare module '@fastify/jwt' {
+  interface FastifyJWT {
+    user: {
       id: string;
       email: string;
       username: string;
@@ -13,8 +13,15 @@ declare module 'fastify' {
   }
 }
 
-export function authMiddleware(app: FastifyInstance) {
-  return async function authenticate(request: FastifyRequest, reply: FastifyReply) {
+// Extend FastifyInstance to include authenticate decorator
+declare module 'fastify' {
+  interface FastifyInstance {
+    authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+  }
+}
+
+export function authMiddleware(_app: FastifyInstance) {
+  return async function authenticate(request: FastifyRequest, _reply: FastifyReply) {
     try {
       // Verify JWT token
       await request.jwtVerify();
@@ -43,6 +50,6 @@ export async function optionalAuth(request: FastifyRequest) {
     await request.jwtVerify();
   } catch {
     // Ignore authentication errors for optional auth
-    request.user = undefined;
+    // User will remain undefined if verification fails
   }
 }

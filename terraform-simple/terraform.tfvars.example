@@ -1,0 +1,18 @@
+# AWS Configuration
+aws_region = "us-east-1"
+
+# Domain Configuration
+domain_name = "tapaskroy.me"
+subdomain   = "watchagent"
+
+# EC2 Configuration
+instance_type = "t3.medium" # 2 vCPU, 4GB RAM - ~$30/month
+
+# SSH Key - Terraform will use ~/.ssh/id_rsa.pub by default
+# Or provide your own public key:
+# ssh_public_key = "ssh-rsa AAAAB3Nza..."
+
+# API Keys - DO NOT PUT HERE! Set via environment variables:
+# export TF_VAR_tmdb_api_key="your_key"
+# export TF_VAR_omdb_api_key="your_key"
+# export TF_VAR_anthropic_api_key="your_key"

@@ -18,9 +18,25 @@ export interface WatchlistItem {
   content: ContentCard;
 }
 
-// Add to watchlist request
+// Add to watchlist request (with UUID)
 export interface AddToWatchlistRequest {
   contentId: string;
+  status?: WatchlistStatus;
+  priority?: number;
+  notes?: string;
+}
+
+// Add to watchlist with TMDB data (for direct addition from search)
+export interface AddToWatchlistWithTMDBRequest {
+  tmdbId: string | number;
+  type: 'movie' | 'tv';
+  title: string;
+  overview?: string;
+  posterPath?: string;
+  backdropPath?: string;
+  releaseDate?: string;
+  genres?: Array<{ id: number; name: string }>;
+  rating?: number;
   status?: WatchlistStatus;
   priority?: number;
   notes?: string;
@@ -46,6 +62,21 @@ export interface GetWatchlistRequest {
 // Zod validators
 export const addToWatchlistSchema = z.object({
   contentId: z.string().uuid(),
+  status: z.enum(['to_watch', 'watching', 'watched']).optional().default('to_watch'),
+  priority: z.number().int().min(0).optional().default(0),
+  notes: z.string().max(1000).optional(),
+});
+
+export const addToWatchlistWithTMDBSchema = z.object({
+  tmdbId: z.union([z.string(), z.number()]),
+  type: z.enum(['movie', 'tv']),
+  title: z.string(),
+  overview: z.string().optional(),
+  posterPath: z.string().optional(),
+  backdropPath: z.string().optional(),
+  releaseDate: z.string().optional(),
+  genres: z.array(z.object({ id: z.number(), name: z.string() })).optional(),
+  rating: z.number().optional(),
   status: z.enum(['to_watch', 'watching', 'watched']).optional().default('to_watch'),
   priority: z.number().int().min(0).optional().default(0),
   notes: z.string().max(1000).optional(),

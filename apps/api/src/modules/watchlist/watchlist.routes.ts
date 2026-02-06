@@ -2,9 +2,11 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { WatchlistService } from '../../services/watchlist/watchlist.service';
 import {
   addToWatchlistSchema,
+  addToWatchlistWithTMDBSchema,
   updateWatchlistSchema,
   getWatchlistSchema,
   AddToWatchlistRequest,
+  AddToWatchlistWithTMDBRequest,
   UpdateWatchlistRequest,
   GetWatchlistRequest,
 } from '@watchagent/shared';
@@ -48,12 +50,14 @@ export async function watchlistRoutes(app: FastifyInstance) {
 
       return reply.send({
         success: true,
-        data: result.items,
-        meta: {
-          page: filters.page || 1,
-          limit: filters.limit || 20,
-          total: result.total,
-          totalPages: Math.ceil(result.total / (filters.limit || 20)),
+        data: {
+          items: result.items,
+          meta: {
+            page: filters.page || 1,
+            limit: filters.limit || 20,
+            total: result.total,
+            totalPages: Math.ceil(result.total / (filters.limit || 20)),
+          },
         },
       });
     }
@@ -92,6 +96,67 @@ export async function watchlistRoutes(app: FastifyInstance) {
       const validated = addToWatchlistSchema.parse(request.body);
 
       const item = await watchlistService.addToWatchlist(userId, validated);
+
+      return reply.code(201).send({
+        success: true,
+        data: item,
+      });
+    }
+  );
+
+  /**
+   * POST /api/v1/watchlist/from-tmdb
+   * Add item to watchlist directly from TMDB data
+   */
+  app.post<{ Body: AddToWatchlistWithTMDBRequest }>(
+    '/from-tmdb',
+    {
+      onRequest: [app.authenticate],
+      schema: {
+        description: 'Add content to watchlist from TMDB data',
+        tags: ['watchlist'],
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: 'object',
+          required: ['tmdbId', 'type', 'title'],
+          properties: {
+            tmdbId: {},
+            type: { type: 'string', enum: ['movie', 'tv'] },
+            title: { type: 'string' },
+            overview: { type: 'string' },
+            posterPath: { type: 'string' },
+            backdropPath: { type: 'string' },
+            releaseDate: { type: 'string' },
+            genres: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'number' },
+                  name: { type: 'string' },
+                },
+              },
+            },
+            rating: { type: 'number' },
+            status: {
+              type: 'string',
+              enum: ['to_watch', 'watching', 'watched'],
+              default: 'to_watch',
+            },
+            priority: { type: 'number', minimum: 0, default: 0 },
+            notes: { type: 'string', maxLength: 1000 },
+          },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Body: AddToWatchlistWithTMDBRequest }>,
+      reply: FastifyReply
+    ) => {
+      const userId = request.user!.id;
+      const validated = addToWatchlistWithTMDBSchema.parse(request.body);
+
+      const item = await watchlistService.addToWatchlistWithTMDB(userId, validated);
 
       return reply.code(201).send({
         success: true,
@@ -177,6 +242,40 @@ export async function watchlistRoutes(app: FastifyInstance) {
       return reply.send({
         success: true,
         message: 'Item removed from watchlist',
+      });
+    }
+  );
+
+  /**
+   * GET /api/v1/watchlist/check/:tmdbId
+   * Check if content is in watchlist by TMDB ID
+   */
+  app.get<{ Params: { tmdbId: string } }>(
+    '/check/:tmdbId',
+    {
+      onRequest: [app.authenticate],
+      schema: {
+        description: 'Check if content is in watchlist',
+        tags: ['watchlist'],
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: 'object',
+          required: ['tmdbId'],
+          properties: {
+            tmdbId: { type: 'string' },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user!.id;
+      const { tmdbId } = request.params as any;
+
+      const result = await watchlistService.isInWatchlistByTMDB(userId, tmdbId);
+
+      return reply.send({
+        success: true,
+        data: result,
       });
     }
   );

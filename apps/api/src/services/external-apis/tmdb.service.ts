@@ -3,7 +3,7 @@ import Bottleneck from 'bottleneck';
 import { env } from '../../config/env';
 import { CacheService, cacheKeys } from '../../config/redis';
 import { TMDB_API_URL, CACHE_TTL } from '@watchagent/shared';
-import { logError, logDebug } from '../../config/logger';
+import { logDebug } from '../../config/logger';
 
 // Rate limiter: 40 requests per 10 seconds
 const limiter = new Bottleneck({
@@ -200,6 +200,7 @@ export class TMDBService {
       ratingTo?: number;
       sortBy?: string;
       page?: number;
+      language?: string;
     }
   ) {
     const cacheKey = cacheKeys.apiCache('tmdb', `/discover/${type}/${JSON.stringify(filters)}`);
@@ -231,6 +232,9 @@ export class TMDBService {
 
     if (filters.ratingFrom) params['vote_average.gte'] = filters.ratingFrom;
     if (filters.ratingTo) params['vote_average.lte'] = filters.ratingTo;
+
+    // Filter by original language (e.g., 'fr' for French)
+    if (filters.language) params['with_original_language'] = filters.language;
 
     // Make API call with rate limiting
     const response = await limiter.schedule(() =>

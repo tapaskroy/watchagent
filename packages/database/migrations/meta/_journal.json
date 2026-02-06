@@ -8,6 +8,27 @@
       "when": 1768723591995,
       "tag": "0000_dry_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1768794399318,
+      "tag": "0001_sturdy_jackpot",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1770364232000,
+      "tag": "0002_add_viewing_preferences_text",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1770365000000,
+      "tag": "0003_add_learned_preferences",
+      "breakpoints": true
     }
   ]
 }

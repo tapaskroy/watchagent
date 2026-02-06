@@ -36,7 +36,13 @@ export class ContentAggregatorService {
           (Date.now() - new Date(existingContent.updatedAt).getTime()) / (1000 * 60 * 60 * 24);
         if (daysSinceUpdate < 7) {
           logDebug('Content found in database', { tmdbId, type });
-          return existingContent as Content;
+          // Convert string ratings and popularity to numbers
+          return {
+            ...existingContent,
+            tmdbRating: existingContent.tmdbRating ? parseFloat(existingContent.tmdbRating) : undefined,
+            imdbRating: existingContent.imdbRating ? parseFloat(existingContent.imdbRating) : undefined,
+            popularity: existingContent.popularity ? parseFloat(existingContent.popularity) : undefined,
+          } as Content;
         }
       }
 
@@ -48,7 +54,16 @@ export class ContentAggregatorService {
 
       if (!tmdbData) {
         logError(new Error('Failed to fetch from TMDB'), { tmdbId, type });
-        return existingContent as Content | null;
+        if (existingContent) {
+          // Convert string ratings and popularity to numbers before returning
+          return {
+            ...existingContent,
+            tmdbRating: existingContent.tmdbRating ? parseFloat(existingContent.tmdbRating) : undefined,
+            imdbRating: existingContent.imdbRating ? parseFloat(existingContent.imdbRating) : undefined,
+            popularity: existingContent.popularity ? parseFloat(existingContent.popularity) : undefined,
+          } as Content;
+        }
+        return null;
       }
 
       // Fetch from OMDB if IMDb ID is available
@@ -70,14 +85,24 @@ export class ContentAggregatorService {
           })
           .where(eq(content.tmdbId, tmdbId));
 
+        // Convert string ratings and popularity to numbers
         return {
           ...existingContent,
           ...transformedData,
           updatedAt: new Date(),
+          tmdbRating: transformedData.tmdbRating ? parseFloat(transformedData.tmdbRating) : undefined,
+          imdbRating: transformedData.imdbRating ? parseFloat(transformedData.imdbRating) : undefined,
+          popularity: transformedData.popularity ? parseFloat(transformedData.popularity) : undefined,
         } as Content;
       } else {
         const [newContent] = await db.insert(content).values(transformedData).returning();
-        return newContent as Content;
+        // Convert string ratings and popularity to numbers
+        return {
+          ...newContent,
+          tmdbRating: newContent.tmdbRating ? parseFloat(newContent.tmdbRating) : undefined,
+          imdbRating: newContent.imdbRating ? parseFloat(newContent.imdbRating) : undefined,
+          popularity: newContent.popularity ? parseFloat(newContent.popularity) : undefined,
+        } as Content;
       }
     } catch (error) {
       logError(error as Error, { tmdbId, type, service: 'ContentAggregator' });
@@ -92,17 +117,13 @@ export class ContentAggregatorService {
     query: string,
     type?: ContentType,
     page: number = 1
-  ): Promise<{ results: any[]; totalPages: number; totalResults: number }> {
+  ): Promise<any[]> {
     try {
       const results = await this.tmdb.search(query, type, page);
-      return {
-        results: results.results || [],
-        totalPages: results.total_pages || 0,
-        totalResults: results.total_results || 0,
-      };
+      return (results.results || []).map((item: any) => this.transformListItem(item));
     } catch (error) {
       logError(error as Error, { query, type, page, service: 'ContentAggregator' });
-      return { results: [], totalPages: 0, totalResults: 0 };
+      return [];
     }
   }
 
@@ -113,7 +134,7 @@ export class ContentAggregatorService {
     try {
       const mediaType = type || 'all';
       const results = await this.tmdb.getTrending(mediaType, timeWindow);
-      return results.results || [];
+      return (results.results || []).map((item: any) => this.transformListItem(item));
     } catch (error) {
       logError(error as Error, { type, timeWindow, service: 'ContentAggregator' });
       return [];
@@ -126,14 +147,10 @@ export class ContentAggregatorService {
   async getPopular(type: ContentType, page: number = 1) {
     try {
       const results = await this.tmdb.getPopular(type, page);
-      return {
-        results: results.results || [],
-        totalPages: results.total_pages || 0,
-        totalResults: results.total_results || 0,
-      };
+      return (results.results || []).map((item: any) => this.transformListItem(item));
     } catch (error) {
       logError(error as Error, { type, page, service: 'ContentAggregator' });
-      return { results: [], totalPages: 0, totalResults: 0 };
+      return [];
     }
   }
 
@@ -143,15 +160,33 @@ export class ContentAggregatorService {
   async discover(type: ContentType, filters: any) {
     try {
       const results = await this.tmdb.discover(type, filters);
-      return {
-        results: results.results || [],
-        totalPages: results.total_pages || 0,
-        totalResults: results.total_results || 0,
-      };
+      return (results.results || []).map((item: any) => this.transformListItem(item));
     } catch (error) {
       logError(error as Error, { type, filters, service: 'ContentAggregator' });
-      return { results: [], totalPages: 0, totalResults: 0 };
+      return [];
     }
+  }
+
+  /**
+   * Transform TMDB list item (for search, trending, popular, discover results)
+   * Converts snake_case to camelCase for frontend compatibility
+   */
+  private transformListItem(item: any) {
+    const type = item.media_type || (item.title ? 'movie' : 'tv');
+    return {
+      id: item.id,
+      tmdbId: item.id.toString(),
+      type,
+      title: item.title || item.name,
+      originalTitle: item.original_title || item.original_name,
+      overview: item.overview,
+      posterPath: item.poster_path,
+      backdropPath: item.backdrop_path,
+      releaseDate: item.release_date || item.first_air_date,
+      tmdbRating: item.vote_average,
+      popularity: item.popularity,
+      genres: item.genre_ids?.map((id: number) => ({ id, name: '' })) || [],
+    };
   }
 
   /**

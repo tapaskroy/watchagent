@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { ContentAggregatorService } from '../../services/external-apis/aggregator.service';
-import { contentSearchSchema, contentDetailsSchema, ContentType } from '@watchagent/shared';
+import { ContentType } from '@watchagent/shared';
 
 export async function contentRoutes(app: FastifyInstance) {
   const contentService = new ContentAggregatorService();

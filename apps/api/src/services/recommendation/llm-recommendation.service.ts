@@ -1,6 +1,5 @@
 import { db } from '@watchagent/database';
 import {
-  users,
   userPreferences,
   content,
   ratings,
@@ -23,6 +22,7 @@ import { logError, logDebug, logInfo } from '../../config/logger';
 interface ContentCandidate {
   tmdb_id: string;
   title: string;
+  type: 'movie' | 'tv';
   genres: string[];
   rating: number;
   popularity: number;
@@ -46,14 +46,20 @@ export class LLMRecommendationService {
   /**
    * Generate personalized recommendations for a user
    */
-  async generateRecommendations(userId: string): Promise<Recommendation[]> {
-    logInfo('Generating recommendations for user', { userId });
+  async generateRecommendations(userId: string, forceRefresh: boolean = false): Promise<Recommendation[]> {
+    logInfo('Generating recommendations for user', { userId, forceRefresh });
 
-    // 1. Check cache (24hr TTL)
-    const cached = await this.getCachedRecommendations(userId);
-    if (cached && cached.length > 0) {
-      logDebug('Recommendations found in cache', { userId, count: cached.length });
-      return cached;
+    // 1. Check cache (24hr TTL) unless forceRefresh is true
+    if (!forceRefresh) {
+      const cached = await this.getCachedRecommendations(userId);
+      if (cached && cached.length > 0) {
+        logDebug('Recommendations found in cache', { userId, count: cached.length });
+        return cached;
+      }
+    } else {
+      logInfo('Skipping cache due to forceRefresh', { userId });
+      // Clear existing cache and DB recommendations
+      await this.clearRecommendations(userId);
     }
 
     // 2. Build user context
@@ -92,7 +98,7 @@ export class LLMRecommendationService {
     }
 
     // 7. Enrich with full content data from database
-    const enriched = await this.enrichRecommendations(userId, parsedRecommendations);
+    const enriched = await this.enrichRecommendations(userId, parsedRecommendations, candidates);
 
     // 8. Store in database and cache
     await this.storeRecommendations(userId, enriched);
@@ -129,7 +135,11 @@ export class LLMRecommendationService {
     });
 
     if (dbRecommendations.length > 0) {
-      return dbRecommendations as Recommendation[];
+      // Transform score from string to number
+      return dbRecommendations.map((rec: any) => ({
+        ...rec,
+        score: parseFloat(rec.score),
+      })) as Recommendation[];
     }
 
     return null;
@@ -228,6 +238,7 @@ export class LLMRecommendationService {
           candidates.set(item.id.toString(), {
             tmdb_id: item.id.toString(),
             title: item.title || item.name,
+            type: item.media_type === 'tv' ? 'tv' : 'movie',
             genres: (item.genre_ids || []).map((id: number) => id.toString()),
             rating: item.vote_average || 0,
             popularity: item.popularity || 0,
@@ -252,6 +263,7 @@ export class LLMRecommendationService {
               candidates.set(item.id.toString(), {
                 tmdb_id: item.id.toString(),
                 title: item.title || item.name,
+                type: type,
                 genres: (item.genre_ids || []).map((id: number) => id.toString()),
                 rating: item.vote_average || 0,
                 popularity: item.popularity || 0,
@@ -271,6 +283,7 @@ export class LLMRecommendationService {
             candidates.set(item.id.toString(), {
               tmdb_id: item.id.toString(),
               title: item.title || item.name,
+              type: type,
               genres: (item.genre_ids || []).map((id: number) => id.toString()),
               rating: item.vote_average || 0,
               popularity: item.popularity || 0,
@@ -293,6 +306,7 @@ export class LLMRecommendationService {
             candidates.set(item.id.toString(), {
               tmdb_id: item.id.toString(),
               title: item.title || item.name,
+              type: type,
               genres: (item.genre_ids || []).map((id: number) => id.toString()),
               rating: item.vote_average || 0,
               popularity: item.popularity || 0,
@@ -419,16 +433,41 @@ Generate exactly ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} recommendations. R
    */
   private async enrichRecommendations(
     userId: string,
-    parsedRecommendations: ParsedRecommendation[]
+    parsedRecommendations: ParsedRecommendation[],
+    candidates: ContentCandidate[]
   ): Promise<Recommendation[]> {
     const enriched: Recommendation[] = [];
+
+    // Build a map of tmdb_id -> type for quick lookup
+    const candidateMap = new Map<string, ContentCandidate>();
+    candidates.forEach((c) => candidateMap.set(c.tmdb_id, c));
 
     for (const rec of parsedRecommendations) {
       try {
         // Find content in database by TMDB ID
-        const contentData = await db.query.content.findFirst({
+        let contentData = await db.query.content.findFirst({
           where: eq(content.tmdbId, rec.tmdb_id),
         });
+
+        // If not found in database, fetch from TMDB and cache it
+        if (!contentData) {
+          const candidate = candidateMap.get(rec.tmdb_id);
+          if (!candidate) {
+            logError(new Error('Candidate not found for recommendation'), { tmdbId: rec.tmdb_id });
+            continue;
+          }
+
+          logInfo('Fetching and caching content from TMDB', { tmdbId: rec.tmdb_id, type: candidate.type });
+
+          // Fetch from TMDB
+          const tmdbData = candidate.type === 'movie'
+            ? await this.tmdb.getMovieDetails(rec.tmdb_id)
+            : await this.tmdb.getTVDetails(rec.tmdb_id);
+
+          // Transform and insert into database
+          const newContent = await this.cacheContentFromTMDB(tmdbData, candidate.type);
+          contentData = newContent;
+        }
 
         if (contentData) {
           const expiresAt = new Date();
@@ -448,11 +487,71 @@ Generate exactly ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} recommendations. R
           });
         }
       } catch (error) {
-        logError(error as Error, { tmdbId: rec.tmdb_id });
+        logError(error as Error, { tmdbId: rec.tmdb_id, service: 'enrichRecommendations' });
       }
     }
 
     return enriched;
+  }
+
+  /**
+   * Cache content from TMDB into local database
+   */
+  private async cacheContentFromTMDB(tmdbData: any, type: 'movie' | 'tv') {
+    try {
+      // Transform TMDB data to our schema
+      const contentRecord = {
+        tmdbId: tmdbData.id.toString(),
+        imdbId: tmdbData.imdb_id || null,
+        type: type,
+        title: tmdbData.title || tmdbData.name,
+        originalTitle: tmdbData.original_title || tmdbData.original_name || null,
+        overview: tmdbData.overview || null,
+        releaseDate: tmdbData.release_date || tmdbData.first_air_date || null,
+        runtime: tmdbData.runtime || tmdbData.episode_run_time?.[0] || null,
+        genres: tmdbData.genres || [],
+        posterPath: tmdbData.poster_path || null,
+        backdropPath: tmdbData.backdrop_path || null,
+        tmdbRating: tmdbData.vote_average?.toString() || null,
+        tmdbVoteCount: tmdbData.vote_count || null,
+        imdbRating: null,
+        popularity: tmdbData.popularity?.toString() || null,
+        language: tmdbData.original_language || null,
+        cast: tmdbData.credits?.cast?.slice(0, 20) || [],
+        crew: tmdbData.credits?.crew?.slice(0, 10) || [],
+        productionCompanies: tmdbData.production_companies || [],
+        keywords: tmdbData.keywords?.keywords || tmdbData.keywords?.results || [],
+        trailerUrl: this.extractTrailerUrl(tmdbData.videos),
+        budget: type === 'movie' ? tmdbData.budget || null : null,
+        revenue: type === 'movie' ? tmdbData.revenue || null : null,
+        status: tmdbData.status || null,
+        numberOfSeasons: type === 'tv' ? tmdbData.number_of_seasons || null : null,
+        numberOfEpisodes: type === 'tv' ? tmdbData.number_of_episodes || null : null,
+      };
+
+      // Insert into database
+      const [inserted] = await db.insert(content).values(contentRecord).returning();
+
+      logInfo('Content cached successfully', { tmdbId: contentRecord.tmdbId, title: contentRecord.title });
+
+      return inserted;
+    } catch (error) {
+      logError(error as Error, { tmdbId: tmdbData.id, type, service: 'cacheContentFromTMDB' });
+      throw error;
+    }
+  }
+
+  /**
+   * Extract YouTube trailer URL from TMDB videos
+   */
+  private extractTrailerUrl(videos: any): string | null {
+    if (!videos?.results) return null;
+
+    const trailer = videos.results.find(
+      (v: any) => v.type === 'Trailer' && v.site === 'YouTube'
+    );
+
+    return trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null;
   }
 
   /**
@@ -490,5 +589,25 @@ Generate exactly ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} recommendations. R
   private async cacheRecommendations(userId: string, recs: Recommendation[]): Promise<void> {
     const cacheKey = cacheKeys.recommendations(userId);
     await CacheService.set(cacheKey, recs, CACHE_TTL.RECOMMENDATIONS);
+  }
+
+  /**
+   * Clear cached and stored recommendations for a user
+   */
+  private async clearRecommendations(userId: string): Promise<void> {
+    try {
+      // Clear Redis cache
+      const cacheKey = cacheKeys.recommendations(userId);
+      await CacheService.del(cacheKey);
+
+      // Clear database recommendations
+      await db
+        .delete(recommendations)
+        .where(eq(recommendations.userId, userId));
+
+      logInfo('Cleared recommendations cache and database', { userId });
+    } catch (error) {
+      logError(error as Error, { userId, service: 'clearRecommendations' });
+    }
   }
 }

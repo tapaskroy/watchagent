@@ -340,6 +340,75 @@ curl -X DELETE http://localhost:3000/api/v1/ratings/37c70e19-11c4-4f96-ba4a-0e99
 
 ---
 
+## 🎬 Recommendations Endpoints
+
+### Get Personalized Recommendations
+```http
+GET /recommendations/personalized?refresh=false&limit=20
+Authorization: Bearer <token>
+```
+
+**Query Parameters:**
+- `refresh` (optional): Force regenerate recommendations (default: false)
+- `limit` (optional): Number of recommendations (default: 20, max: 50)
+
+**Example:**
+```bash
+TOKEN="your_access_token"
+curl http://localhost:3000/api/v1/recommendations/personalized \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Note:** LLM-powered personalized recommendations require a valid Anthropic API key with model access. If the LLM fails, the endpoint will return an empty array.
+
+### Get Similar Content
+```http
+GET /recommendations/similar/:tmdbId?type=movie&limit=10
+```
+
+**Parameters:**
+- `tmdbId` (path): TMDB content ID
+- `type` (query, required): `movie` or `tv`
+- `limit` (optional): Number of results (default: 10, max: 20)
+
+**Example:**
+```bash
+# Get movies similar to Inception (TMDB ID: 27205)
+curl 'http://localhost:3000/api/v1/recommendations/similar/27205?type=movie&limit=5'
+```
+
+### Get Trending Recommendations
+```http
+GET /recommendations/trending?type=movie&timeWindow=week&limit=20
+```
+
+**Query Parameters:**
+- `type` (optional): `movie` or `tv` (default: all)
+- `timeWindow` (optional): `day` or `week` (default: week)
+- `limit` (optional): Number of results (default: 20, max: 50)
+
+**Example:**
+```bash
+curl 'http://localhost:3000/api/v1/recommendations/trending?type=movie&limit=10'
+```
+
+### Refresh Recommendations
+```http
+POST /recommendations/refresh
+Authorization: Bearer <token>
+```
+
+Force regenerate personalized recommendations for the authenticated user.
+
+**Example:**
+```bash
+TOKEN="your_access_token"
+curl -X POST http://localhost:3000/api/v1/recommendations/refresh \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
 ## 📊 Testing Workflow
 
 ### 1. Register or Login
@@ -451,13 +520,12 @@ You can test all endpoints directly from the browser!
 ✅ **Discover** - Advanced filtering by genre, year, rating
 ✅ **Watchlist** - Full CRUD operations
 ✅ **Ratings** - Full CRUD operations with reviews
+✅ **Recommendations** - Personalized, similar, and trending recommendations
 
 ## 🎯 Coming Soon
 
-⏳ **LLM Recommendations** - AI-powered personalized recommendations
 ⏳ **Social Features** - Follow users, activity feed
 ⏳ **User Profiles** - Public profiles, stats, followers
-⏳ **Similar Content** - Find similar movies/shows
 
 ---
 

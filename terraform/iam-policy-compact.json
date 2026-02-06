@@ -1,0 +1,22 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecr:*",
+        "logs:*",
+        "elasticache:*",
+        "rds:*",
+        "ecs:*",
+        "acm:*",
+        "secretsmanager:*",
+        "application-autoscaling:*",
+        "codebuild:*",
+        "s3:*",
+        "iam:PassRole"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

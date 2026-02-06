@@ -13,11 +13,14 @@ import { authRoutes } from './modules/auth/auth.routes';
 import { contentRoutes } from './modules/content/content.routes';
 import { watchlistRoutes } from './modules/watchlist/watchlist.routes';
 import { ratingsRoutes } from './modules/ratings/ratings.routes';
+import { recommendationsRoutes } from './modules/recommendations/recommendations.routes';
+import { chatRoutes } from './modules/chat/chat.routes';
+import { preferencesRoutes } from './modules/preferences/preferences.routes';
 
 export async function buildApp(): Promise<FastifyInstance> {
   // Create Fastify instance
   const app = Fastify({
-    logger,
+    logger: logger as any,
     requestIdLogLabel: 'reqId',
     disableRequestLogging: false,
     trustProxy: true,
@@ -110,8 +113,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(contentRoutes, { prefix: '/api/v1/content' });
   await app.register(watchlistRoutes, { prefix: '/api/v1/watchlist' });
   await app.register(ratingsRoutes, { prefix: '/api/v1/ratings' });
+  await app.register(recommendationsRoutes, { prefix: '/api/v1/recommendations' });
+  await app.register(chatRoutes, { prefix: '/api/v1/chat' });
+  await app.register(preferencesRoutes, { prefix: '/api/v1/preferences' });
   // await app.register(userRoutes, { prefix: '/api/v1/users' });
-  // await app.register(recommendationRoutes, { prefix: '/api/v1/recommendations' });
   // await app.register(socialRoutes, { prefix: '/api/v1/social' });
 
   // Error handler

@@ -1,0 +1,117 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ECRPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:CreateRepository",
+        "ecr:DeleteRepository",
+        "ecr:DescribeRepositories",
+        "ecr:PutLifecyclePolicy",
+        "ecr:SetRepositoryPolicy",
+        "ecr:GetAuthorizationToken",
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchGetImage",
+        "ecr:PutImage",
+        "ecr:InitiateLayerUpload",
+        "ecr:UploadLayerPart",
+        "ecr:CompleteLayerUpload",
+        "ecr:ListImages",
+        "ecr:DescribeImages",
+        "ecr:TagResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CloudWatchLogsPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams",
+        "logs:TagResource",
+        "logs:UntagResource",
+        "logs:PutRetentionPolicy"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ElastiCachePermissions",
+      "Effect": "Allow",
+      "Action": [
+        "elasticache:CreateCacheCluster",
+        "elasticache:CreateCacheSubnetGroup",
+        "elasticache:CreateCacheParameterGroup",
+        "elasticache:DeleteCacheCluster",
+        "elasticache:DeleteCacheSubnetGroup",
+        "elasticache:DeleteCacheParameterGroup",
+        "elasticache:DescribeCacheClusters",
+        "elasticache:DescribeCacheSubnetGroups",
+        "elasticache:DescribeCacheParameterGroups",
+        "elasticache:ModifyCacheCluster",
+        "elasticache:ModifyCacheSubnetGroup",
+        "elasticache:ModifyCacheParameterGroup",
+        "elasticache:AddTagsToResource",
+        "elasticache:ListTagsForResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "RDSPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "rds:CreateDBInstance",
+        "rds:CreateDBSubnetGroup",
+        "rds:CreateDBParameterGroup",
+        "rds:DeleteDBInstance",
+        "rds:DeleteDBSubnetGroup",
+        "rds:DeleteDBParameterGroup",
+        "rds:DescribeDBInstances",
+        "rds:DescribeDBSubnetGroups",
+        "rds:DescribeDBParameterGroups",
+        "rds:DescribeDBEngineVersions",
+        "rds:ModifyDBInstance",
+        "rds:ModifyDBSubnetGroup",
+        "rds:AddTagsToResource",
+        "rds:ListTagsForResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ECSPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:CreateCluster",
+        "ecs:CreateService",
+        "ecs:RegisterTaskDefinition",
+        "ecs:DeregisterTaskDefinition",
+        "ecs:UpdateService",
+        "ecs:DeleteService",
+        "ecs:DescribeClusters",
+        "ecs:DescribeServices",
+        "ecs:DescribeTaskDefinition",
+        "ecs:ListTaskDefinitions",
+        "ecs:ListServices",
+        "ecs:TagResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ACMPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "acm:RequestCertificate",
+        "acm:DescribeCertificate",
+        "acm:DeleteCertificate",
+        "acm:AddTagsToCertificate",
+        "acm:ListCertificates",
+        "acm:GetCertificate"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
