@@ -17,18 +17,35 @@ export default function HomePage() {
   const [chatHistory, setChatHistory] = useState<Array<{ role: string; content: string }>>([]);
   const [searchResults, setSearchResults] = useState<ContentCardType[]>([]);
 
-  // Restore search results from sessionStorage on mount
+  // Restore search results from sessionStorage on mount AND on browser navigation
   useEffect(() => {
-    const savedResults = sessionStorage.getItem('watchagent_search_results');
-    if (savedResults) {
-      try {
-        const parsed = JSON.parse(savedResults);
-        setSearchResults(parsed);
-      } catch (error) {
-        console.error('Error parsing saved search results:', error);
-        sessionStorage.removeItem('watchagent_search_results');
+    const restoreSearchResults = () => {
+      const savedResults = sessionStorage.getItem('watchagent_search_results');
+      if (savedResults) {
+        try {
+          const parsed = JSON.parse(savedResults);
+          console.log('Restoring search results from sessionStorage:', parsed.length);
+          setSearchResults(parsed);
+        } catch (error) {
+          console.error('Error parsing saved search results:', error);
+          sessionStorage.removeItem('watchagent_search_results');
+        }
       }
-    }
+    };
+
+    // Restore on mount
+    restoreSearchResults();
+
+    // Also restore when user navigates back (popstate event)
+    window.addEventListener('popstate', restoreSearchResults);
+
+    // Also restore on page show (handles browser back/forward cache)
+    window.addEventListener('pageshow', restoreSearchResults);
+
+    return () => {
+      window.removeEventListener('popstate', restoreSearchResults);
+      window.removeEventListener('pageshow', restoreSearchResults);
+    };
   }, []);
 
   // Initialize onboarding if needed
