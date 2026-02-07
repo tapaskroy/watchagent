@@ -9,12 +9,27 @@ import type { ContentCard as ContentCardType } from '@watchagent/shared';
 
 export default function HomePage() {
   const router = useRouter();
-  const { data: recommendations, isLoading } = useRecommendations();
+  // Request fresh recommendations if onboarding just completed
+  const { data: recommendations, isLoading, refetch } = useRecommendations();
   const { mutate: refreshRecommendations, isPending: isRefreshing } = useRefreshRecommendations();
   const { conversation, initOnboardingAsync, sendMessageAsync, isSending } = useChat();
   const [chatMessage, setChatMessage] = useState('');
   const [chatHistory, setChatHistory] = useState<Array<{ role: string; content: string }>>([]);
   const [searchResults, setSearchResults] = useState<ContentCardType[]>([]);
+
+  // Restore search results from sessionStorage on mount
+  useEffect(() => {
+    const savedResults = sessionStorage.getItem('watchagent_search_results');
+    if (savedResults) {
+      try {
+        const parsed = JSON.parse(savedResults);
+        setSearchResults(parsed);
+      } catch (error) {
+        console.error('Error parsing saved search results:', error);
+        sessionStorage.removeItem('watchagent_search_results');
+      }
+    }
+  }, []);
 
   // Initialize onboarding if needed
   useEffect(() => {
@@ -41,12 +56,26 @@ export default function HomePage() {
     initOnboarding();
   }, [conversation, initOnboardingAsync]);
 
+  // Refetch recommendations after onboarding completes
+  useEffect(() => {
+    // If user has completed onboarding (not currently in onboarding), refetch recommendations
+    if (conversation && !conversation.isOnboarding && conversation.onboardingCompleted) {
+      console.log('Onboarding completed detected - refetching recommendations');
+      refetch();
+    }
+  }, [conversation?.onboardingCompleted, conversation?.isOnboarding, refetch]);
+
   const handleContentSelect = (content: ContentCardType) => {
     router.push(`/content/${content.tmdbId}?type=${content.type}`);
   };
 
   const handleShowMore = () => {
     router.push('/recommendations');
+  };
+
+  const handleClearSearchResults = () => {
+    setSearchResults([]);
+    sessionStorage.removeItem('watchagent_search_results');
   };
 
   const handleChatSubmit = async (e: React.FormEvent) => {
@@ -78,17 +107,25 @@ export default function HomePage() {
         console.log('First result:', result.searchResults[0]);
         console.log('First result keys:', Object.keys(result.searchResults[0]));
         setSearchResults(result.searchResults);
-        console.log('Search results state updated');
+        // Persist to sessionStorage so results survive navigation
+        sessionStorage.setItem('watchagent_search_results', JSON.stringify(result.searchResults));
+        console.log('Search results state updated and saved');
       } else {
         // Clear search results if this wasn't a search
         console.log('Clearing search results');
         setSearchResults([]);
+        sessionStorage.removeItem('watchagent_search_results');
       }
 
       // If onboarding just completed (transitioned from false to true), refresh recommendations
       if (result.onboardingCompleted && conversation?.isOnboarding && !conversation?.onboardingCompleted) {
-        console.log('Onboarding just completed! Reloading page...');
-        window.location.reload();
+        console.log('Onboarding just completed! Refreshing recommendations...');
+        // Trigger refresh of recommendations to get personalized results
+        refreshRecommendations();
+        // Give a moment for the backend to finish generating, then reload to update conversation state
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
       }
     } catch (error) {
       console.error('Failed to send message:', error);
@@ -122,7 +159,8 @@ export default function HomePage() {
               <p className="text-lg text-text-secondary mb-4">
                 What do you want to watch?
               </p>
-              {!isOnboarding && recommendations && recommendations.length > 0 && (
+              {/* Only show refresh button when NOT showing search results */}
+              {!isOnboarding && recommendations && recommendations.length > 0 && searchResults.length === 0 && (
                 <button
                   onClick={() => refreshRecommendations()}
                   disabled={isRefreshing}
@@ -133,12 +171,20 @@ export default function HomePage() {
               )}
             </div>
 
-            {/* Search Results Grid - Priority over recommendations */}
-            {searchResults.length > 0 ? (
+            {/* Search Results Grid - Shown ONLY when we have search results */}
+            {searchResults.length > 0 && (
               <div className="w-full max-w-5xl mb-8">
-                <h2 className="text-2xl font-semibold mb-6 text-text-primary">
-                  Search Results ({searchResults.length} movies)
-                </h2>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-semibold text-text-primary">
+                    Search Results ({searchResults.length} {searchResults.length === 1 ? 'result' : 'results'})
+                  </h2>
+                  <button
+                    onClick={handleClearSearchResults}
+                    className="text-sm text-text-secondary hover:text-text-primary transition-colors"
+                  >
+                    ✕ Clear Results
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-6 mb-6">
                   {searchResults.map((content) => (
                     <ContentCard
@@ -149,32 +195,32 @@ export default function HomePage() {
                   ))}
                 </div>
               </div>
-            ) : (
-              /* Suggestions Grid - Only 4 items */
-              topSuggestions.length > 0 && (
-                <div className="w-full max-w-5xl mb-8">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-6">
-                    {topSuggestions.map((rec) => (
-                      <ContentCard
-                        key={rec.id}
-                        content={rec.content}
-                        onSelect={handleContentSelect}
-                        recommendationReason={rec.reason}
-                      />
-                    ))}
-                  </div>
+            )}
 
-                  {/* Show More Button */}
-                  <div className="text-center">
-                    <button
-                      onClick={handleShowMore}
-                      className="text-primary hover:underline text-sm font-medium"
-                    >
-                      Show me more
-                    </button>
-                  </div>
+            {/* Suggestions Grid - Shown ONLY when we have NO search results */}
+            {searchResults.length === 0 && topSuggestions.length > 0 && (
+              <div className="w-full max-w-5xl mb-8">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-6">
+                  {topSuggestions.map((rec) => (
+                    <ContentCard
+                      key={rec.id}
+                      content={rec.content}
+                      onSelect={handleContentSelect}
+                      recommendationReason={rec.reason}
+                    />
+                  ))}
                 </div>
-              )
+
+                {/* Show More Button */}
+                <div className="text-center">
+                  <button
+                    onClick={handleShowMore}
+                    className="text-primary hover:underline text-sm font-medium"
+                  >
+                    Show me more
+                  </button>
+                </div>
+              </div>
             )}
           </>
         )}

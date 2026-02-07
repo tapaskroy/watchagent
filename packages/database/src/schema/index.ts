@@ -70,6 +70,8 @@ export const userPreferences = pgTable('user_preferences', {
   notificationSettings: jsonb('notification_settings').notNull().default({}),
   viewingPreferencesText: text('viewing_preferences_text'), // User's viewing preferences in natural language
   learnedPreferences: jsonb('learned_preferences').notNull().default('{}'), // Auto-learned from conversations
+  conversationSummary: jsonb('conversation_summary').notNull().default('{}'), // Conversation memory for recommendations
+  ratingPatterns: jsonb('rating_patterns').notNull().default('{}'), // Analyzed rating patterns and preferences
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

@@ -6,3 +6,4 @@ export * from './rating.types';
 export * from './recommendation.types';
 export * from './social.types';
 export * from './api.types';
+export * from './conversation';

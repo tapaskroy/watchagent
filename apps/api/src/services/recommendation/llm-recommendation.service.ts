@@ -1,24 +1,21 @@
 import { db } from '@watchagent/database';
 import {
-  userPreferences,
   content,
-  ratings,
-  watchlistItems,
   recommendations,
-  follows,
 } from '@watchagent/database';
-import { eq, desc, and, inArray, gt } from 'drizzle-orm';
+import { eq, desc, and, gt } from 'drizzle-orm';
 import { callClaude } from '../../config/anthropic';
 import { CacheService, cacheKeys } from '../../config/redis';
 import { TMDBService } from '../external-apis/tmdb.service';
 import {
   Recommendation,
-  RecommendationContext,
   RECOMMENDATION_CONFIG,
   CACHE_TTL,
   GENRE_NAMES,
+  EnhancedUserContext,
 } from '@watchagent/shared';
 import { logError, logDebug, logInfo } from '../../config/logger';
+import { UserContextService } from './user-context.service';
 
 interface ContentCandidate {
   tmdb_id: string;
@@ -39,42 +36,11 @@ interface ParsedRecommendation {
 
 export class LLMRecommendationService {
   private tmdb: TMDBService;
+  private userContextService: UserContextService;
 
   constructor() {
     this.tmdb = new TMDBService();
-  }
-
-  /**
-   * Helper function to convert genre names to TMDB genre IDs
-   */
-  private genreNamesToIds(genreNames: string[]): number[] {
-    const genreIds: number[] = [];
-    const genreNameMap: Record<string, number> = {};
-
-    // Create reverse mapping from GENRE_NAMES (case-insensitive)
-    Object.entries(GENRE_NAMES).forEach(([id, name]) => {
-      genreNameMap[name.toLowerCase()] = parseInt(id);
-    });
-
-    // Also add common variations and synonyms
-    const synonyms: Record<string, string> = {
-      'sci-fi': 'science fiction',
-      'scifi': 'science fiction',
-      'sf': 'science fiction',
-      'romcom': 'romance',
-      'romantic comedy': 'comedy',
-    };
-
-    genreNames.forEach((name) => {
-      const normalized = name.toLowerCase().trim();
-      const lookupName = synonyms[normalized] || normalized;
-      const id = genreNameMap[lookupName];
-      if (id && !genreIds.includes(id)) {
-        genreIds.push(id);
-      }
-    });
-
-    return genreIds;
+    this.userContextService = new UserContextService();
   }
 
   /**
@@ -96,15 +62,15 @@ export class LLMRecommendationService {
       await this.clearRecommendations(userId);
     }
 
-    // 2. Build user context
-    const context = await this.buildUserContext(userId);
-    if (!context) {
+    // 2. Build rich user context (includes conversation memory and rating patterns)
+    const richContext = await this.userContextService.buildRichUserContext(userId);
+    if (!richContext) {
       logError(new Error('Failed to build user context'), { userId });
       return [];
     }
 
     // 3. Get candidate content
-    const candidates = await this.getCandidateContent(context);
+    const candidates = await this.getCandidateContentEnhanced(richContext);
     if (candidates.length === 0) {
       logError(new Error('No candidate content found'), { userId });
       return [];
@@ -112,8 +78,8 @@ export class LLMRecommendationService {
 
     logDebug('Generated candidates', { userId, candidateCount: candidates.length });
 
-    // 4. Generate prompt
-    const prompt = this.buildRecommendationPrompt(context, candidates);
+    // 4. Generate enhanced prompt with full context
+    const prompt = this.buildEnhancedRecommendationPrompt(richContext, candidates);
 
     // 5. Call Claude Sonnet API
     let responseText: string;
@@ -181,269 +147,125 @@ export class LLMRecommendationService {
 
   /**
    * Build user context for recommendations
+  // @ts-ignore - Deprecated but kept for reference
    */
-  private async buildUserContext(userId: string): Promise<RecommendationContext | null> {
-    try {
-      // Get user preferences
-      const prefs = await db.query.userPreferences.findFirst({
-        where: eq(userPreferences.userId, userId),
-      });
-
-      if (!prefs) return null;
-
-      // Extract and merge learned preferences from conversation
-      const learnedPrefs = (prefs.learnedPreferences as any) || {};
-      const learnedGenreNames = (learnedPrefs.favoriteGenres as string[]) || [];
-      const learnedGenreIds = this.genreNamesToIds(learnedGenreNames);
-      const learnedActors = (learnedPrefs.favoriteActors as string[]) || [];
-
-      // Merge explicit preferences with learned preferences
-      const allGenres = Array.from(
-        new Set([...(prefs.preferredGenres as number[]), ...learnedGenreIds])
-      );
-      const allActors = Array.from(
-        new Set([...(prefs.favoriteActors as string[]), ...learnedActors])
-      );
-
-      logInfo('Merged user preferences for recommendations', {
-        userId,
-        explicitGenres: prefs.preferredGenres,
-        learnedGenres: learnedGenreIds,
-        mergedGenres: allGenres,
-        explicitActors: Array.isArray(prefs.favoriteActors) ? prefs.favoriteActors.length : 0,
-        learnedActors: learnedActors.length,
-        mergedActors: allActors.length,
-      });
-
-      // Get recent ratings and watchlist
-      const userRatings = await db.query.ratings.findMany({
-        where: eq(ratings.userId, userId),
-        orderBy: [desc(ratings.createdAt)],
-        limit: 20,
-        with: {
-          content: true,
-        },
-      });
-
-      const userWatchlist = await db.query.watchlistItems.findMany({
-        where: and(eq(watchlistItems.userId, userId), eq(watchlistItems.status, 'to_watch')),
-        limit: 10,
-        with: {
-          content: true,
-        },
-      });
-
-      // Get friends' activity (users they follow)
-      const userFollows = await db.query.follows.findMany({
-        where: eq(follows.followerId, userId),
-        limit: 10,
-      });
-
-      const friendIds = userFollows.map((f) => f.followingId);
-      let friendsWatching: string[] = [];
-
-      if (friendIds.length > 0) {
-        const friendRatings = await db.query.ratings.findMany({
-          where: and(inArray(ratings.userId, friendIds), gt(ratings.rating, '7.0')),
-          orderBy: [desc(ratings.createdAt)],
-          limit: 10,
-          with: {
-            content: true,
-          },
-        });
-
-        friendsWatching = friendRatings.map((r) => r.content.title);
-      }
-
-      return {
-        userProfile: {
-          preferredGenres: allGenres,
-          favoriteActors: allActors,
-          preferredLanguages: prefs.preferredLanguages as string[],
-          contentTypes: prefs.contentTypes as ('movie' | 'tv')[],
-        },
-        recentActivity: {
-          watched: userRatings.map((r) => ({
-            title: r.content.title,
-            rating: parseFloat(r.rating),
-            review: r.review || undefined,
-          })),
-          watchlist: userWatchlist.map((w) => w.content.title),
-        },
-        socialContext: {
-          friendsWatching,
-          trendingInNetwork: [], // Can be populated with trending content among friends
-        },
-      };
-    } catch (error) {
-      logError(error as Error, { userId, service: 'LLMRecommendation' });
-      return null;
-    }
-  }
 
   /**
    * Get candidate content for recommendations
    */
-  private async getCandidateContent(context: RecommendationContext): Promise<ContentCandidate[]> {
-    const candidates = new Map<string, ContentCandidate>();
-
-    try {
-      // 1. Get trending content (200)
-      const trendingData = await this.tmdb.getTrending('all', 'week');
-      const trending = (trendingData.results || []).slice(0, 200);
-      trending.forEach((item: any) => {
-        if (!candidates.has(item.id.toString())) {
-          candidates.set(item.id.toString(), {
-            tmdb_id: item.id.toString(),
-            title: item.title || item.name,
-            type: item.media_type === 'tv' ? 'tv' : 'movie',
-            genres: (item.genre_ids || []).map((id: number) => id.toString()),
-            rating: item.vote_average || 0,
-            popularity: item.popularity || 0,
-            overview: (item.overview || '').substring(0, 150),
-          });
-        }
-      });
-
-      // 2. Get content matching preferred genres (150)
-      if (context.userProfile.preferredGenres.length > 0) {
-        const contentTypes: ('movie' | 'tv')[] = context.userProfile.contentTypes;
-
-        for (const type of contentTypes) {
-          const genreMatches = await this.tmdb.discover(type, {
-            genres: context.userProfile.preferredGenres,
-            sortBy: 'vote_average.desc',
-            page: 1,
-          });
-
-          (genreMatches.results || []).slice(0, 75).forEach((item: any) => {
-            if (!candidates.has(item.id.toString())) {
-              candidates.set(item.id.toString(), {
-                tmdb_id: item.id.toString(),
-                title: item.title || item.name,
-                type: type,
-                genres: (item.genre_ids || []).map((id: number) => id.toString()),
-                rating: item.vote_average || 0,
-                popularity: item.popularity || 0,
-                overview: (item.overview || '').substring(0, 150),
-              });
-            }
-          });
-        }
-      }
-
-      // 3. Get high-rated content (100)
-      const contentTypes: ('movie' | 'tv')[] = context.userProfile.contentTypes;
-      for (const type of contentTypes) {
-        const topRated = await this.tmdb.getTopRated(type, 1);
-        (topRated.results || []).slice(0, 50).forEach((item: any) => {
-          if (!candidates.has(item.id.toString())) {
-            candidates.set(item.id.toString(), {
-              tmdb_id: item.id.toString(),
-              title: item.title || item.name,
-              type: type,
-              genres: (item.genre_ids || []).map((id: number) => id.toString()),
-              rating: item.vote_average || 0,
-              popularity: item.popularity || 0,
-              overview: (item.overview || '').substring(0, 150),
-            });
-          }
-        });
-      }
-
-      // 4. Get new releases in preferred genres (50)
-      for (const type of contentTypes) {
-        const newReleases = await this.tmdb.discover(type, {
-          genres: context.userProfile.preferredGenres,
-          sortBy: 'release_date.desc',
-          page: 1,
-        });
-
-        (newReleases.results || []).slice(0, 25).forEach((item: any) => {
-          if (!candidates.has(item.id.toString())) {
-            candidates.set(item.id.toString(), {
-              tmdb_id: item.id.toString(),
-              title: item.title || item.name,
-              type: type,
-              genres: (item.genre_ids || []).map((id: number) => id.toString()),
-              rating: item.vote_average || 0,
-              popularity: item.popularity || 0,
-              overview: (item.overview || '').substring(0, 150),
-            });
-          }
-        });
-      }
-
-      // Return top 500 diverse candidates
-      return Array.from(candidates.values()).slice(0, RECOMMENDATION_CONFIG.CANDIDATE_POOL_SIZE);
-    } catch (error) {
-      logError(error as Error, { service: 'LLMRecommendation', method: 'getCandidateContent' });
-      return [];
-    }
-  }
 
   /**
-   * Build recommendation prompt for Claude
+   * Build enhanced recommendation prompt with full conversation memory and rating patterns
    */
-  private buildRecommendationPrompt(
-    context: RecommendationContext,
+  private buildEnhancedRecommendationPrompt(
+    context: EnhancedUserContext,
     candidates: ContentCandidate[]
   ): string {
+    // Format watched list
     const watchedList =
       context.recentActivity.watched.length > 0
         ? context.recentActivity.watched
-            .map(
-              (w) =>
-                `- "${w.title}" - Rated ${w.rating}/10${w.review ? ` - "${w.review}"` : ''}`
-            )
+            .map((w) => `- "${w.title}" - Rated ${w.rating}/10${w.review ? ` - "${w.review}"` : ''}`)
             .join('\n')
         : 'No recent ratings';
 
+    // Format watchlist with notes
     const watchlistStr =
       context.recentActivity.watchlist.length > 0
-        ? context.recentActivity.watchlist.join(', ')
+        ? context.recentActivity.watchlist
+            .map((w) => {
+              let str = `- "${w.title}"`;
+              if (w.notes) str += ` - Note: ${w.notes}`;
+              if (w.priority) str += ` [Priority: ${w.priority}]`;
+              return str;
+            })
+            .join('\n')
         : 'Empty watchlist';
 
+    // Format friends watching
     const friendsWatchingStr =
       context.socialContext.friendsWatching.length > 0
         ? context.socialContext.friendsWatching.join(', ')
         : 'No friends activity';
 
+    // Format genre preferences from rating patterns
+    const genrePreferencesStr =
+      Object.keys(context.ratingInsights.genrePreferences).length > 0
+        ? Object.entries(context.ratingInsights.genrePreferences)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(([genreId, avgRating]) => `- ${GENRE_NAMES[parseInt(genreId)] || genreId}: ${avgRating.toFixed(1)}/10`)
+            .join('\n')
+        : 'Not enough rating data';
+
+    // Format candidates
     const candidatesStr = candidates
-      .map(
-        (c) =>
-          `[${c.tmdb_id}] "${c.title}" - Genres: ${c.genres.join(', ')} - Rating: ${c.rating}/10 - ${c.overview}...`
-      )
+      .map((c) => {
+        const genreNames = c.genres.map(g => GENRE_NAMES[parseInt(g)] || g).join(', ');
+        return `[${c.tmdb_id}] "${c.title}" - Genres: ${genreNames} - Rating: ${c.rating}/10 - ${c.overview}`;
+      })
       .join('\n');
 
-    return `You are an expert movie and TV show recommendation system. Analyze the user's viewing history and preferences to suggest ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} highly personalized recommendations.
+    return `You are an expert movie and TV show recommendation system with deep knowledge of the user's preferences from past conversations.
 
-USER PROFILE:
-Favorite Genres: ${context.userProfile.preferredGenres.join(', ') || 'None specified'}
-Favorite Actors: ${context.userProfile.favoriteActors.join(', ') || 'None specified'}
-Content Preferences: ${context.userProfile.contentTypes.join(', ')}
+USER BACKGROUND (from initial onboarding conversation):
+${context.conversationMemory.onboardingSummary || 'No onboarding conversation available'}
+
+Key preferences discovered during onboarding:
+${context.conversationMemory.onboardingKeyPoints.length > 0
+  ? context.conversationMemory.onboardingKeyPoints.map(p => `- ${p}`).join('\n')
+  : '- No specific key points recorded'}
+
+CURRENT USER PROFILE:
+Favorite Genres: ${context.userProfile.preferredGenres.map(id => GENRE_NAMES[id] || id).join(', ') || 'None specified'}
+Favorite Actors/Directors: ${context.userProfile.favoriteActors.join(', ') || 'None specified'}
+Preferred Languages: ${context.userProfile.preferredLanguages.join(', ')}
+Content Types: ${context.userProfile.contentTypes.join(', ')}
+
+MOOD PREFERENCES (what they like):
+${context.userProfile.moodPreferences.length > 0
+  ? context.userProfile.moodPreferences.map(m => `- ${m}`).join('\n')
+  : 'No specific mood preferences mentioned'}
+
+DISLIKES (avoid these):
+${context.userProfile.dislikes.length > 0
+  ? context.userProfile.dislikes.map(d => `- ${d}`).join('\n')
+  : 'No specific dislikes mentioned'}
+
+RATING PATTERNS (shows user's taste from ${context.ratingInsights.averageRating > 0 ? 'their ratings' : 'limited data'}):
+${context.ratingInsights.averageRating > 0 ? `Average Rating: ${context.ratingInsights.averageRating.toFixed(1)}/10
+Quality Threshold: User typically rates good content ${context.ratingInsights.qualityThreshold}+/10
+
+Genre Preferences (by average rating):
+${genrePreferencesStr}` : 'Not enough ratings to analyze patterns'}
 
 RECENTLY WATCHED & RATED (most recent first):
 ${watchedList}
 
-CURRENT WATCHLIST:
+CURRENT WATCHLIST (${context.recentActivity.watchlistCount} items):
 ${watchlistStr}
+
+RECENT CONVERSATION INSIGHTS:
+${context.conversationMemory.recentConversationInsights.length > 0
+  ? context.conversationMemory.recentConversationInsights.map(i => `- ${i}`).join('\n')
+  : 'No recent conversations beyond onboarding'}
 
 SOCIAL CONTEXT:
 Friends are watching: ${friendsWatchingStr}
 
 AVAILABLE CONTENT DATABASE:
-Here are ${candidates.length} trending and popular titles to choose from:
+Here are ${candidates.length} carefully selected titles:
 ${candidatesStr}
 
 INSTRUCTIONS:
-1. Analyze the user's viewing patterns, ratings, and preferences
-2. Consider genre preferences, but don't be too restrictive - surprise the user with adjacent genres they might enjoy
-3. Pay attention to rating patterns - if they rate certain types of content higher, prioritize similar content
-4. Use their reviews to understand nuanced preferences (e.g., "too slow" might indicate preference for fast-paced content)
-5. Consider social context but don't weight it too heavily (10-15% influence)
-6. Provide a mix of: well-known titles (60%), hidden gems (30%), and recent releases (10%)
-7. Each recommendation should have a compelling, personalized reason
+1. **USE THE ONBOARDING CONVERSATION AS YOUR PRIMARY GUIDANCE** - The user explicitly told us their preferences
+2. Pay close attention to mood preferences and ABSOLUTELY AVOID content matching their dislikes
+3. Consider their rating patterns - they have ${context.ratingInsights.qualityThreshold >= 8 ? 'high' : context.ratingInsights.qualityThreshold >= 6 ? 'medium' : 'lenient'} standards based on their quality threshold
+4. Reference their watchlist notes to understand intent behind saves
+5. Use recent conversation insights to adapt to their current mood
+6. Provide a mix: 50% match their stated preferences perfectly, 30% similar-but-new discoveries, 20% pleasant surprises
+7. If they have strong dislikes, filter those out completely
+8. Each recommendation must have a personalized reason that references their SPECIFIC preferences from the onboarding or ratings
 
 OUTPUT FORMAT (valid JSON only):
 {
@@ -452,12 +274,80 @@ OUTPUT FORMAT (valid JSON only):
       "tmdb_id": "12345",
       "title": "Movie Title",
       "confidence_score": 0.95,
-      "reason": "One compelling sentence explaining why this matches their taste, referencing specific movies they've enjoyed or preferences they've shown."
+      "reason": "Based on your love of [specific preference from onboarding] and your high ratings for [genre], this perfectly matches your taste for [mood/theme]."
     }
   ]
 }
 
-Generate exactly ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} recommendations. Return ONLY the JSON, no additional text.`;
+Generate exactly ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} recommendations. Focus on QUALITY matches to their preferences over variety. Return ONLY the JSON, no additional text.`;
+  }
+
+  /**
+   * Get candidate content with enhanced filtering based on dislikes
+   */
+  private async getCandidateContentEnhanced(context: EnhancedUserContext): Promise<ContentCandidate[]> {
+    const candidates = new Map<string, ContentCandidate>();
+
+    try {
+      // Get trending content
+      const trending = await this.tmdb.getTrending('all', 'week');
+      this.addCandidates(candidates, trending.results || [], 200);
+
+      // Get content matching preferred genres (if any)
+      if (context.userProfile.preferredGenres.length > 0) {
+        for (const genreId of context.userProfile.preferredGenres.slice(0, 3)) {
+          const genreContent = await this.tmdb.discover('movie', {
+            genres: [genreId],
+            page: 1,
+          });
+          this.addCandidates(candidates, genreContent.results || [], 50);
+        }
+      }
+
+      // Get highly rated content
+      const topRated = await this.tmdb.getTopRated('movie', 1);
+      this.addCandidates(candidates, topRated.results || [], 100);
+
+      // Get new releases in preferred genres
+      if (context.userProfile.preferredGenres.length > 0) {
+        for (const genreId of context.userProfile.preferredGenres.slice(0, 2)) {
+          const newReleases = await this.tmdb.discover('movie', {
+            genres: [genreId],
+            sortBy: 'release_date.desc',
+            page: 1,
+          });
+          this.addCandidates(candidates, newReleases.results || [], 50);
+        }
+      }
+
+      return Array.from(candidates.values()).slice(0, RECOMMENDATION_CONFIG.CANDIDATE_POOL_SIZE);
+    } catch (error) {
+      logError(error as Error, { service: 'LLMRecommendation.getCandidateContentEnhanced' });
+      return [];
+    }
+  }
+
+  /**
+   * Helper to add candidates to map
+   */
+  private addCandidates(candidates: Map<string, ContentCandidate>, items: any[], limit: number): void {
+    let added = 0;
+    for (const item of items) {
+      if (added >= limit) break;
+      if (candidates.has(item.id.toString())) continue;
+
+      const type = item.media_type === 'tv' ? 'tv' : 'movie';
+      candidates.set(item.id.toString(), {
+        tmdb_id: item.id.toString(),
+        title: item.title || item.name,
+        type,
+        genres: (item.genre_ids || []).map((id: number) => id.toString()),
+        rating: item.vote_average || 0,
+        popularity: item.popularity || 0,
+        overview: (item.overview || '').substring(0, 150),
+      });
+      added++;
+    }
   }
 
   /**

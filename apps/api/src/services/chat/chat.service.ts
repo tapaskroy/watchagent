@@ -7,6 +7,7 @@ import { logError, logDebug, logInfo } from '../../config/logger';
 import { TMDBService } from '../external-apis/tmdb.service';
 import { PreferencesService } from '../preferences/preferences.service';
 import { LLMRecommendationService } from '../recommendation/llm-recommendation.service';
+import { ConversationSummaryService } from '../conversation/conversation-summary.service';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -44,6 +45,7 @@ export class ChatService {
   private tmdb: TMDBService;
   private preferencesService: PreferencesService;
   private recommendationService: LLMRecommendationService;
+  private conversationSummaryService: ConversationSummaryService;
 
   constructor() {
     this.anthropic = new Anthropic({
@@ -52,6 +54,7 @@ export class ChatService {
     this.tmdb = new TMDBService();
     this.preferencesService = new PreferencesService();
     this.recommendationService = new LLMRecommendationService();
+    this.conversationSummaryService = new ConversationSummaryService();
   }
 
   /**
@@ -317,12 +320,33 @@ Keep the tone friendly and conversational. Ask open-ended questions that encoura
           await this.preferencesService.syncConversationPreferences(userId);
           logInfo('Synced conversation preferences to user preferences after onboarding', { userId });
 
+          // Update conversation summary
+          await this.conversationSummaryService.updateUserConversationSummary(userId);
+          logInfo('Updated conversation summary after onboarding', { userId });
+
           // Generate fresh personalized recommendations based on learned preferences
           await this.recommendationService.generateRecommendations(userId, true);
           logInfo('Generated fresh recommendations after onboarding', { userId });
         } catch (error) {
           logError(error as Error, { userId, service: 'ChatService.syncAfterOnboarding' });
           // Don't fail the whole request if sync fails
+        }
+      }
+
+      // For non-onboarding conversations, update summary periodically
+      if (!conversation.isOnboarding && conversation.onboardingCompleted) {
+        const userMessageCount = updatedMessages.filter((m) => m.role === 'user').length;
+
+        // Update conversation summary after every 3 messages in regular conversations
+        if (userMessageCount % 3 === 0) {
+          try {
+            // Update in background (don't await)
+            this.conversationSummaryService.updateUserConversationSummary(userId)
+              .then(() => logInfo('Updated conversation summary for regular chat', { userId }))
+              .catch((err) => logError(err, { userId, service: 'ChatService.updateConversationSummary' }));
+          } catch (error) {
+            logError(error as Error, { userId, service: 'ChatService.updateConversationSummary' });
+          }
         }
       }
 
