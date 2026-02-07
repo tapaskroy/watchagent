@@ -3,6 +3,7 @@ import { env } from './config/env';
 import { logger } from './config/logger';
 import { testConnection, closeDatabase } from '@watchagent/database';
 import { redis } from './config/redis';
+import { runMigrations } from './utils/run-migrations';
 
 async function start() {
   try {
@@ -11,6 +12,9 @@ async function start() {
     if (!dbConnected) {
       throw new Error('Failed to connect to database');
     }
+
+    // Run database migrations
+    await runMigrations();
 
     // Build and start server
     const app = await buildApp();
