@@ -86,6 +86,10 @@ export class LLMRecommendationService {
     let responseText: string;
     try {
       responseText = await callClaude(prompt);
+      // Log the full response for debugging
+      console.log('=== CLAUDE RAW RESPONSE ===');
+      console.log(responseText);
+      console.log('=== END CLAUDE RESPONSE ===');
     } catch (error) {
       logError(error as Error, { userId, service: 'LLMRecommendation' });
       return [];
@@ -93,6 +97,9 @@ export class LLMRecommendationService {
 
     // 5. Parse and validate recommendations
     const parsedRecommendations = this.parseRecommendations(responseText);
+    console.log('=== PARSED RECOMMENDATIONS (first 3) ===');
+    console.log(JSON.stringify(parsedRecommendations.slice(0, 3), null, 2));
+    console.log('=== END PARSED ===');
     if (parsedRecommendations.length === 0) {
       logError(new Error('No recommendations parsed from LLM response'), { userId });
       return [];
