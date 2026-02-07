@@ -49,12 +49,22 @@ export class LLMRecommendationService {
   async generateRecommendations(userId: string, forceRefresh: boolean = false): Promise<Recommendation[]> {
     logInfo('Generating recommendations for user', { userId, forceRefresh });
 
-    // 1. Check cache (24hr TTL) unless forceRefresh is true
+    // 1. Check cache (6hr TTL) unless forceRefresh is true
+    // Reduced from 24hr to 6hr to allow for more dynamic recommendations
     if (!forceRefresh) {
       const cached = await this.getCachedRecommendations(userId);
       if (cached && cached.length > 0) {
-        logDebug('Recommendations found in cache', { userId, count: cached.length });
-        return cached;
+        // Check if cache is still fresh (6 hours)
+        const oldestRec = cached[0];
+        const cacheAge = Date.now() - new Date(oldestRec.createdAt).getTime();
+        const SIX_HOURS = 6 * 60 * 60 * 1000;
+
+        if (cacheAge < SIX_HOURS) {
+          logDebug('Recommendations found in cache', { userId, count: cached.length, ageHours: (cacheAge / (60 * 60 * 1000)).toFixed(1) });
+          return cached;
+        } else {
+          logInfo('Cache expired, generating fresh recommendations', { userId });
+        }
       }
     } else {
       logInfo('Skipping cache due to forceRefresh', { userId });
@@ -155,12 +165,71 @@ export class LLMRecommendationService {
    */
 
   /**
+   * Get contextual time information for recommendations
+   */
+  private getTimeContext(): {
+    timeOfDay: string;
+    dayType: string;
+    currentTime: string;
+    season: string;
+  } {
+    const now = new Date();
+    const hour = now.getHours();
+    const dayOfWeek = now.getDay(); // 0 = Sunday, 6 = Saturday
+    const month = now.getMonth(); // 0-11
+
+    // Time of day
+    let timeOfDay: string;
+    if (hour >= 5 && hour < 12) timeOfDay = 'morning';
+    else if (hour >= 12 && hour < 17) timeOfDay = 'afternoon';
+    else if (hour >= 17 && hour < 21) timeOfDay = 'evening';
+    else timeOfDay = 'night';
+
+    // Day type
+    const dayType = (dayOfWeek === 0 || dayOfWeek === 6) ? 'weekend' : 'weekday';
+
+    // Season (Northern Hemisphere)
+    let season: string;
+    if (month >= 2 && month <= 4) season = 'spring';
+    else if (month >= 5 && month <= 7) season = 'summer';
+    else if (month >= 8 && month <= 10) season = 'fall';
+    else season = 'winter';
+
+    return {
+      timeOfDay,
+      dayType,
+      currentTime: now.toLocaleString('en-US', {
+        weekday: 'long',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      }),
+      season,
+    };
+  }
+
+  /**
    * Build enhanced recommendation prompt with full conversation memory and rating patterns
    */
   private buildEnhancedRecommendationPrompt(
     context: EnhancedUserContext,
     candidates: ContentCandidate[]
   ): string {
+    // Get time context
+    const timeContext = this.getTimeContext();
+
+    // Calculate days since last activity
+    let daysSinceLastActivity = 'unknown';
+    if (context.recentActivity.watched.length > 0) {
+      const lastWatched = context.recentActivity.watched[0];
+      if (lastWatched.watchedAt) {
+        const daysDiff = Math.floor(
+          (Date.now() - new Date(lastWatched.watchedAt).getTime()) / (1000 * 60 * 60 * 24)
+        );
+        daysSinceLastActivity = daysDiff === 0 ? 'today' : daysDiff === 1 ? 'yesterday' : `${daysDiff} days ago`;
+      }
+    }
+
     // Format watched list
     const watchedList =
       context.recentActivity.watched.length > 0
@@ -207,6 +276,19 @@ export class LLMRecommendationService {
       .join('\n');
 
     return `You are an expert movie and TV show recommendation system with deep knowledge of the user's preferences from past conversations.
+
+CURRENT CONTEXT (adapt recommendations to this):
+🕐 Time: ${timeContext.currentTime} (${timeContext.timeOfDay} on a ${timeContext.dayType})
+📅 Season: ${timeContext.season}
+🎬 Last Activity: ${daysSinceLastActivity}
+
+${timeContext.timeOfDay === 'morning' ? '→ Morning mood: Suggest lighter, uplifting, or inspiring content'
+  : timeContext.timeOfDay === 'afternoon' ? '→ Afternoon mood: Suggest engaging, thought-provoking content'
+  : timeContext.timeOfDay === 'evening' ? '→ Evening mood: Prime time for their favorite genres and popular picks'
+  : '→ Late night mood: Consider intense thrillers, deep dramas, or comfort rewatches'}
+
+${timeContext.dayType === 'weekend' ? '→ Weekend: More time for longer content, series binges, or epic movies'
+  : '→ Weekday: Consider shorter content or quick episodes they can finish'}
 
 USER BACKGROUND (from initial onboarding conversation):
 ${context.conversationMemory.onboardingSummary || 'No onboarding conversation available'}
@@ -258,14 +340,38 @@ Here are ${candidates.length} carefully selected titles:
 ${candidatesStr}
 
 INSTRUCTIONS:
-1. **USE THE ONBOARDING CONVERSATION AS YOUR PRIMARY GUIDANCE** - The user explicitly told us their preferences
-2. Pay close attention to mood preferences and ABSOLUTELY AVOID content matching their dislikes
-3. Consider their rating patterns - they have ${context.ratingInsights.qualityThreshold >= 8 ? 'high' : context.ratingInsights.qualityThreshold >= 6 ? 'medium' : 'lenient'} standards based on their quality threshold
-4. Reference their watchlist notes to understand intent behind saves
-5. Use recent conversation insights to adapt to their current mood
-6. Provide a mix: 50% match their stated preferences perfectly, 30% similar-but-new discoveries, 20% pleasant surprises
-7. If they have strong dislikes, filter those out completely
-8. Each recommendation must have a personalized reason that references their SPECIFIC preferences from the onboarding or ratings
+1. **ADAPT TO CURRENT CONTEXT** - It's ${timeContext.timeOfDay} on a ${timeContext.dayType}. Adjust recommendations accordingly:
+   - Morning: Light, uplifting, inspirational
+   - Afternoon: Engaging, thought-provoking
+   - Evening: Their favorite genres, popular picks
+   - Night: Intense, deep, or comfort content
+   - Weekend: Longer content, binge-worthy series
+   - Weekday: Shorter, easier to finish
+
+2. **USE THE ONBOARDING CONVERSATION AS YOUR PRIMARY GUIDANCE** - The user explicitly told us their preferences
+
+3. **CONSIDER THEIR ACTIVITY PATTERNS** - Last activity was ${daysSinceLastActivity}
+   ${daysSinceLastActivity === 'today' || daysSinceLastActivity === 'yesterday'
+     ? '- User is actively watching! Lean into their current momentum and recent interests'
+     : '- User hasn\'t watched recently. Suggest compelling, can\'t-miss titles to re-engage them'}
+
+4. Pay close attention to mood preferences and ABSOLUTELY AVOID content matching their dislikes
+
+5. Consider their rating patterns - they have ${context.ratingInsights.qualityThreshold >= 8 ? 'high' : context.ratingInsights.qualityThreshold >= 6 ? 'medium' : 'lenient'} standards based on their quality threshold
+
+6. Reference their watchlist notes to understand intent behind saves
+
+7. Use recent conversation insights to adapt to their current mood
+
+8. **PROVIDE VARIETY** - Mix familiar and new:
+   - 40% Perfect matches to stated preferences
+   - 30% Similar-but-new discoveries
+   - 20% Timely picks based on current context (time/day/season)
+   - 10% Pleasant surprises
+
+9. If they have strong dislikes, filter those out completely
+
+10. Each recommendation must have a personalized reason that references their SPECIFIC preferences from the onboarding or ratings
 
 OUTPUT FORMAT (valid JSON only):
 {
@@ -419,7 +525,7 @@ Generate exactly ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} recommendations. F
 
         if (contentData) {
           const expiresAt = new Date();
-          expiresAt.setHours(expiresAt.getHours() + 24); // 24 hour TTL
+          expiresAt.setHours(expiresAt.getHours() + 6); // 6 hour TTL (matches cache)
 
           enriched.push({
             id: '', // Will be generated by database

@@ -17,7 +17,7 @@ export const CACHE_TTL = {
   REDIS_HOT: 3600, // 1 hour
   REDIS_WARM: 86400, // 24 hours
   POSTGRES_API: 604800, // 7 days
-  RECOMMENDATIONS: 86400, // 24 hours
+  RECOMMENDATIONS: 21600, // 6 hours (allows for time-of-day variation)
 } as const;
 
 // Rate limits

@@ -27,7 +27,10 @@ export function useRefreshRecommendations() {
 
   return useMutation({
     mutationFn: () => recommendationsApi.refreshRecommendations(),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Update the cache with fresh data immediately
+      queryClient.setQueryData(['recommendations', undefined], data);
+      // Also invalidate to trigger refetch for any other components
       queryClient.invalidateQueries({ queryKey: ['recommendations'] });
     },
   });
