@@ -157,9 +157,6 @@ export default function HomePage() {
     ? 'Tell me about your favorite movies or shows...'
     : 'Tell me what you\'re in the mood for...';
 
-  console.log('Render - searchResults.length:', searchResults.length);
-  console.log('Render - searchResults:', searchResults);
-
   return (
     <div className="min-h-screen flex flex-col">
       {/* Main content area - centered */}

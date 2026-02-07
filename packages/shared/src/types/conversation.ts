@@ -66,7 +66,7 @@ export interface EnhancedUserContext {
   conversationMemory: ConversationMemory;
   ratingInsights: RatingInsights;
   recentActivity: {
-    watched: Array<{ title: string; rating: number; review?: string }>;
+    watched: Array<{ title: string; rating: number; review?: string; watchedAt?: Date }>;
     watchlist: Array<{ title: string; notes?: string; priority?: number }>;
     watchlistCount: number;
   };

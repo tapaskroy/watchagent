@@ -120,6 +120,7 @@ export class UserContextService {
             title: r.content.title,
             rating: parseFloat(r.rating),
             review: r.review || undefined,
+            watchedAt: r.updatedAt || r.createdAt,
           })),
           watchlist: userWatchlist.map(w => ({
             title: w.content.title,

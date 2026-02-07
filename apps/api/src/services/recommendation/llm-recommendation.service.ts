@@ -79,19 +79,10 @@ export class LLMRecommendationService {
       return [];
     }
 
-    // 3. Get candidate content
-    const candidates = await this.getCandidateContentEnhanced(richContext);
-    if (candidates.length === 0) {
-      logError(new Error('No candidate content found'), { userId });
-      return [];
-    }
+    // 3. Generate enhanced prompt with full context (no candidate list - let Claude choose freely)
+    const prompt = this.buildEnhancedRecommendationPrompt(richContext);
 
-    logDebug('Generated candidates', { userId, candidateCount: candidates.length });
-
-    // 4. Generate enhanced prompt with full context
-    const prompt = this.buildEnhancedRecommendationPrompt(richContext, candidates);
-
-    // 5. Call Claude Sonnet API
+    // 4. Call Claude Sonnet API
     let responseText: string;
     try {
       responseText = await callClaude(prompt);
@@ -100,26 +91,82 @@ export class LLMRecommendationService {
       return [];
     }
 
-    // 6. Parse and validate recommendations
+    // 5. Parse and validate recommendations
     const parsedRecommendations = this.parseRecommendations(responseText);
     if (parsedRecommendations.length === 0) {
       logError(new Error('No recommendations parsed from LLM response'), { userId });
       return [];
     }
 
-    // 7. Enrich with full content data from database
-    const enriched = await this.enrichRecommendations(userId, parsedRecommendations, candidates);
+    // 7. Enrich with full content data from database (validate TMDB IDs)
+    const enriched = await this.enrichRecommendations(userId, parsedRecommendations);
 
-    // 8. Store in database and cache
-    await this.storeRecommendations(userId, enriched);
-    await this.cacheRecommendations(userId, enriched);
+    // 7.5. Remove duplicates by contentId (keep first occurrence with highest score)
+    const seen = new Set<string>();
+    const deduplicated = enriched.filter(rec => {
+      if (seen.has(rec.contentId)) {
+        logInfo('Removing duplicate recommendation', {
+          userId,
+          contentId: rec.contentId,
+          title: rec.content?.title
+        });
+        return false;
+      }
+      seen.add(rec.contentId);
+      return true;
+    });
+
+    if (deduplicated.length < enriched.length) {
+      logInfo('Removed duplicates from recommendations', {
+        userId,
+        originalCount: enriched.length,
+        deduplicatedCount: deduplicated.length,
+        removedCount: enriched.length - deduplicated.length
+      });
+    }
+
+    // 7.6. Check if we have enough recommendations (some may have been invalid TMDB IDs)
+    if (deduplicated.length < RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS) {
+      logInfo('Insufficient valid recommendations after validation', {
+        userId,
+        validCount: deduplicated.length,
+        targetCount: RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS,
+        parsedCount: parsedRecommendations.length
+      });
+
+      // Note: We accept fewer than 20 recommendations rather than retry
+      // This prevents infinite loops and provides faster response
+      // Future improvement: Could implement retry with feedback about invalid IDs
+    }
+
+    // 8. Store in database
+    await this.storeRecommendations(userId, deduplicated);
+
+    // 9. Refetch from database to get recommendations with real IDs
+    const storedRecommendations = await db.query.recommendations.findMany({
+      where: eq(recommendations.userId, userId),
+      orderBy: [desc(recommendations.score)],
+      limit: RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS,
+      with: {
+        content: true,
+      },
+    });
+
+    // Transform to Recommendation[] type
+    const recsWithIds = storedRecommendations.map((rec: any) => ({
+      ...rec,
+      score: parseFloat(rec.score),
+    })) as Recommendation[];
+
+    // 10. Cache recommendations with IDs
+    await this.cacheRecommendations(userId, recsWithIds);
 
     logInfo('Recommendations generated successfully', {
       userId,
-      count: enriched.length,
+      count: recsWithIds.length,
     });
 
-    return enriched;
+    return recsWithIds;
   }
 
   /**
@@ -212,8 +259,7 @@ export class LLMRecommendationService {
    * Build enhanced recommendation prompt with full conversation memory and rating patterns
    */
   private buildEnhancedRecommendationPrompt(
-    context: EnhancedUserContext,
-    candidates: ContentCandidate[]
+    context: EnhancedUserContext
   ): string {
     // Get time context
     const timeContext = this.getTimeContext();
@@ -267,15 +313,9 @@ export class LLMRecommendationService {
             .join('\n')
         : 'Not enough rating data';
 
-    // Format candidates
-    const candidatesStr = candidates
-      .map((c) => {
-        const genreNames = c.genres.map(g => GENRE_NAMES[parseInt(g)] || g).join(', ');
-        return `[${c.tmdb_id}] "${c.title}" - Genres: ${genreNames} - Rating: ${c.rating}/10 - ${c.overview}`;
-      })
-      .join('\n');
+    return `You are an expert movie and TV show recommendation system with deep knowledge of the user's preferences from past conversations and TMDB (The Movie Database).
 
-    return `You are an expert movie and TV show recommendation system with deep knowledge of the user's preferences from past conversations.
+IMPORTANT: You have access to your training data about movies and TV shows from TMDB. Recommend content by providing valid TMDB IDs from your knowledge. Choose from the vast catalog of movies and TV shows you know about.
 
 CURRENT CONTEXT (adapt recommendations to this):
 🕐 Time: ${timeContext.currentTime} (${timeContext.timeOfDay} on a ${timeContext.dayType})
@@ -335,10 +375,6 @@ ${context.conversationMemory.recentConversationInsights.length > 0
 SOCIAL CONTEXT:
 Friends are watching: ${friendsWatchingStr}
 
-AVAILABLE CONTENT DATABASE:
-Here are ${candidates.length} carefully selected titles:
-${candidatesStr}
-
 INSTRUCTIONS:
 1. **ADAPT TO CURRENT CONTEXT** - It's ${timeContext.timeOfDay} on a ${timeContext.dayType}. Adjust recommendations accordingly:
    - Morning: Light, uplifting, inspirational
@@ -373,6 +409,14 @@ INSTRUCTIONS:
 
 10. Each recommendation must have a personalized reason that references their SPECIFIC preferences from the onboarding or ratings
 
+11. **NO DUPLICATES** - Each tmdb_id should appear only once in your recommendations
+
+12. **VALID TMDB IDs ONLY** - Only recommend movies and TV shows that you know exist in TMDB
+    - Use actual TMDB IDs from well-known content
+    - Include a mix of popular, critically acclaimed, and hidden gems
+    - Cover a range of years (recent releases + classics if they match preferences)
+    - Prioritize content that's widely available and highly rated
+
 OUTPUT FORMAT (valid JSON only):
 {
   "recommendations": [
@@ -390,7 +434,10 @@ Generate exactly ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} recommendations. F
 
   /**
    * Get candidate content with enhanced filtering based on dislikes
+   * NOTE: Currently unused - we let Claude recommend freely from TMDB
+   * Keeping for potential future use
    */
+  // @ts-ignore - Deprecated but kept for reference
   private async getCandidateContentEnhanced(context: EnhancedUserContext): Promise<ContentCandidate[]> {
     const candidates = new Map<string, ContentCandidate>();
 
@@ -435,7 +482,9 @@ Generate exactly ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} recommendations. F
 
   /**
    * Helper to add candidates to map
+   * NOTE: Currently unused - kept for potential future use
    */
+  // @ts-ignore - Deprecated but kept for reference
   private addCandidates(candidates: Map<string, ContentCandidate>, items: any[], limit: number): void {
     let added = 0;
     for (const item of items) {
@@ -483,18 +532,13 @@ Generate exactly ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} recommendations. F
   }
 
   /**
-   * Enrich recommendations with full content data
+   * Enrich recommendations with full content data (validates TMDB IDs)
    */
   private async enrichRecommendations(
     userId: string,
-    parsedRecommendations: ParsedRecommendation[],
-    candidates: ContentCandidate[]
+    parsedRecommendations: ParsedRecommendation[]
   ): Promise<Recommendation[]> {
     const enriched: Recommendation[] = [];
-
-    // Build a map of tmdb_id -> type for quick lookup
-    const candidateMap = new Map<string, ContentCandidate>();
-    candidates.forEach((c) => candidateMap.set(c.tmdb_id, c));
 
     for (const rec of parsedRecommendations) {
       try {
@@ -505,21 +549,33 @@ Generate exactly ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} recommendations. F
 
         // If not found in database, fetch from TMDB and cache it
         if (!contentData) {
-          const candidate = candidateMap.get(rec.tmdb_id);
-          if (!candidate) {
-            logError(new Error('Candidate not found for recommendation'), { tmdbId: rec.tmdb_id });
-            continue;
+          logInfo('Validating and fetching content from TMDB', { tmdbId: rec.tmdb_id });
+
+          // Try fetching as movie first, then TV if that fails
+          let tmdbData: any = null;
+          let contentType: 'movie' | 'tv' = 'movie';
+
+          try {
+            tmdbData = await this.tmdb.getMovieDetails(rec.tmdb_id);
+            contentType = 'movie';
+          } catch (movieError) {
+            // If movie fetch fails, try TV
+            try {
+              tmdbData = await this.tmdb.getTVDetails(rec.tmdb_id);
+              contentType = 'tv';
+            } catch (tvError) {
+              logError(new Error('Invalid TMDB ID - not found as movie or TV'), {
+                tmdbId: rec.tmdb_id,
+                title: rec.title,
+                movieError: movieError instanceof Error ? movieError.message : 'Unknown',
+                tvError: tvError instanceof Error ? tvError.message : 'Unknown'
+              });
+              continue; // Skip this recommendation
+            }
           }
 
-          logInfo('Fetching and caching content from TMDB', { tmdbId: rec.tmdb_id, type: candidate.type });
-
-          // Fetch from TMDB
-          const tmdbData = candidate.type === 'movie'
-            ? await this.tmdb.getMovieDetails(rec.tmdb_id)
-            : await this.tmdb.getTVDetails(rec.tmdb_id);
-
           // Transform and insert into database
-          const newContent = await this.cacheContentFromTMDB(tmdbData, candidate.type);
+          const newContent = await this.cacheContentFromTMDB(tmdbData, contentType);
           contentData = newContent;
         }
 
