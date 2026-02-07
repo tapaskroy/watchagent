@@ -173,6 +173,15 @@ export default function ContentDetailPage({ params }: { params: { id: string } }
                       Add to Watchlist
                     </Button>
                   )}
+                  {content.trailerUrl && (
+                    <Button
+                      variant="secondary"
+                      size="lg"
+                      onClick={() => window.open(content.trailerUrl, '_blank')}
+                    >
+                      Watch Trailer
+                    </Button>
+                  )}
                 </div>
                 {success && (
                   <div className="text-green-500 text-sm">
