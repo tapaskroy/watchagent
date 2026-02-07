@@ -28,8 +28,8 @@ interface ContentCandidate {
 }
 
 interface ParsedRecommendation {
-  tmdb_id: string;
   title: string;
+  year?: number;
   confidence_score: number;
   reason: string;
 }
@@ -86,10 +86,6 @@ export class LLMRecommendationService {
     let responseText: string;
     try {
       responseText = await callClaude(prompt);
-      // Log the full response for debugging
-      console.log('=== CLAUDE RAW RESPONSE ===');
-      console.log(responseText);
-      console.log('=== END CLAUDE RESPONSE ===');
     } catch (error) {
       logError(error as Error, { userId, service: 'LLMRecommendation' });
       return [];
@@ -97,9 +93,6 @@ export class LLMRecommendationService {
 
     // 5. Parse and validate recommendations
     const parsedRecommendations = this.parseRecommendations(responseText);
-    console.log('=== PARSED RECOMMENDATIONS (first 3) ===');
-    console.log(JSON.stringify(parsedRecommendations.slice(0, 3), null, 2));
-    console.log('=== END PARSED ===');
     if (parsedRecommendations.length === 0) {
       logError(new Error('No recommendations parsed from LLM response'), { userId });
       return [];
@@ -322,7 +315,7 @@ export class LLMRecommendationService {
 
     return `You are an expert movie and TV show recommendation system with deep knowledge of the user's preferences from past conversations and TMDB (The Movie Database).
 
-IMPORTANT: You have access to your training data about movies and TV shows from TMDB. Recommend content by providing valid TMDB IDs from your knowledge. Choose from the vast catalog of movies and TV shows you know about.
+IMPORTANT: You have access to your training data about movies and TV shows. Recommend content by providing exact movie/TV show titles and release years. Choose from the vast catalog of movies and TV shows you know about.
 
 CURRENT CONTEXT (adapt recommendations to this):
 🕐 Time: ${timeContext.currentTime} (${timeContext.timeOfDay} on a ${timeContext.dayType})
@@ -416,11 +409,12 @@ INSTRUCTIONS:
 
 10. Each recommendation must have a personalized reason that references their SPECIFIC preferences from the onboarding or ratings
 
-11. **NO DUPLICATES** - Each tmdb_id should appear only once in your recommendations
+11. **NO DUPLICATES** - Each movie/show title should appear only once in your recommendations
 
-12. **VALID TMDB IDs ONLY** - Only recommend movies and TV shows that you know exist in TMDB
-    - Use actual TMDB IDs from well-known content
-    - Include a mix of popular, critically acclaimed, and hidden gems
+12. **REAL MOVIES AND TV SHOWS ONLY** - Only recommend content that actually exists
+    - Use exact official titles from TMDB (The Movie Database)
+    - Include release year to avoid confusion with remakes
+    - Mix popular, critically acclaimed, and hidden gems
     - Cover a range of years (recent releases + classics if they match preferences)
     - Prioritize content that's widely available and highly rated
 
@@ -428,13 +422,18 @@ OUTPUT FORMAT (valid JSON only):
 {
   "recommendations": [
     {
-      "tmdb_id": "12345",
-      "title": "Movie Title",
+      "title": "Movie or TV Show Title",
+      "year": 2019,
       "confidence_score": 0.95,
       "reason": "Based on your love of [specific preference from onboarding] and your high ratings for [genre], this perfectly matches your taste for [mood/theme]."
     }
   ]
 }
+
+IMPORTANT:
+- Use the EXACT official title as it appears in TMDB (The Movie Database)
+- Include the release year to help identify the correct content
+- Be specific with titles to avoid confusion (e.g., "The Girl with the Dragon Tattoo (2011)" not just "The Girl with the Dragon Tattoo")
 
 Generate exactly ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} recommendations. Focus on QUALITY matches to their preferences over variety. Return ONLY the JSON, no additional text.`;
   }
@@ -539,7 +538,7 @@ Generate exactly ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} recommendations. F
   }
 
   /**
-   * Enrich recommendations with full content data (validates TMDB IDs)
+   * Enrich recommendations with full content data (searches TMDB by title)
    */
   private async enrichRecommendations(
     userId: string,
@@ -549,36 +548,64 @@ Generate exactly ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} recommendations. F
 
     for (const rec of parsedRecommendations) {
       try {
-        // Find content in database by TMDB ID
-        let contentData = await db.query.content.findFirst({
-          where: eq(content.tmdbId, rec.tmdb_id),
+        // Search TMDB for the movie/TV show by title
+        logInfo('Searching TMDB for content', { title: rec.title, year: rec.year });
+
+        const searchResults = await this.tmdb.search(rec.title);
+
+        if (!searchResults.results || searchResults.results.length === 0) {
+          logError(new Error('No TMDB results found for title'), {
+            title: rec.title,
+            year: rec.year
+          });
+          continue; // Skip this recommendation
+        }
+
+        // Find best match (prefer exact year match if year provided)
+        let bestMatch = searchResults.results[0];
+        if (rec.year) {
+          const yearMatch = searchResults.results.find((result: any) => {
+            const resultYear = result.release_date ? new Date(result.release_date).getFullYear()
+                             : result.first_air_date ? new Date(result.first_air_date).getFullYear()
+                             : null;
+            return resultYear === rec.year;
+          });
+          if (yearMatch) bestMatch = yearMatch;
+        }
+
+        const tmdbId = bestMatch.id.toString();
+        const contentType: 'movie' | 'tv' = bestMatch.media_type === 'tv' ? 'tv' : 'movie';
+
+        logInfo('Found TMDB match', {
+          title: rec.title,
+          tmdbId,
+          actualTitle: bestMatch.title || bestMatch.name,
+          contentType
         });
 
-        // If not found in database, fetch from TMDB and cache it
-        if (!contentData) {
-          logInfo('Validating and fetching content from TMDB', { tmdbId: rec.tmdb_id });
+        // Check if content already in database
+        let contentData = await db.query.content.findFirst({
+          where: eq(content.tmdbId, tmdbId),
+        });
 
-          // Try fetching as movie first, then TV if that fails
+        // If not in database, fetch full details and cache
+        if (!contentData) {
           let tmdbData: any = null;
-          let contentType: 'movie' | 'tv' = 'movie';
 
           try {
-            tmdbData = await this.tmdb.getMovieDetails(rec.tmdb_id);
-            contentType = 'movie';
-          } catch (movieError) {
-            // If movie fetch fails, try TV
-            try {
-              tmdbData = await this.tmdb.getTVDetails(rec.tmdb_id);
-              contentType = 'tv';
-            } catch (tvError) {
-              logError(new Error('Invalid TMDB ID - not found as movie or TV'), {
-                tmdbId: rec.tmdb_id,
-                title: rec.title,
-                movieError: movieError instanceof Error ? movieError.message : 'Unknown',
-                tvError: tvError instanceof Error ? tvError.message : 'Unknown'
-              });
-              continue; // Skip this recommendation
+            if (contentType === 'movie') {
+              tmdbData = await this.tmdb.getMovieDetails(tmdbId);
+            } else {
+              tmdbData = await this.tmdb.getTVDetails(tmdbId);
             }
+          } catch (error) {
+            logError(new Error('Failed to fetch TMDB details'), {
+              tmdbId,
+              title: rec.title,
+              contentType,
+              error: error instanceof Error ? error.message : 'Unknown'
+            });
+            continue; // Skip this recommendation
           }
 
           // Transform and insert into database
@@ -604,7 +631,7 @@ Generate exactly ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} recommendations. F
           });
         }
       } catch (error) {
-        logError(error as Error, { tmdbId: rec.tmdb_id, service: 'enrichRecommendations' });
+        logError(error as Error, { title: rec.title, service: 'enrichRecommendations' });
       }
     }
 
