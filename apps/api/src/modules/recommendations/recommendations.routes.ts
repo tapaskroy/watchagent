@@ -100,9 +100,25 @@ export async function recommendationsRoutes(app: FastifyInstance) {
       // Get similar content from TMDB
       const similar = await tmdbService.getSimilar(type, tmdbId, 1);
 
+      // Transform TMDB data to ContentCard format
+      const transformedResults = (similar.results || []).slice(0, limit).map((item: any) => ({
+        id: item.id.toString(),
+        tmdbId: item.id.toString(),
+        type: type,
+        title: item.title || item.name || 'Unknown',
+        releaseDate: item.release_date || item.first_air_date,
+        posterPath: item.poster_path,
+        tmdbRating: item.vote_average,
+        genres: item.genre_ids ? item.genre_ids.map((id: number) => ({
+          id,
+          name: '' // Genre names not available in TMDB similar results
+        })) : [],
+        inWatchlist: false,
+      }));
+
       return reply.send({
         success: true,
-        data: (similar.results || []).slice(0, limit),
+        data: transformedResults,
         meta: {
           total: similar.total_results || 0,
           algorithm: 'tmdb-similar',
@@ -142,9 +158,25 @@ export async function recommendationsRoutes(app: FastifyInstance) {
 
       const trending = await tmdbService.getTrending(type || 'all', timeWindow);
 
+      // Transform TMDB data to ContentCard format
+      const transformedResults = (trending.results || []).slice(0, limit).map((item: any) => ({
+        id: item.id.toString(),
+        tmdbId: item.id.toString(),
+        type: item.media_type === 'tv' ? 'tv' : 'movie', // Handle mixed content
+        title: item.title || item.name || 'Unknown',
+        releaseDate: item.release_date || item.first_air_date,
+        posterPath: item.poster_path,
+        tmdbRating: item.vote_average,
+        genres: item.genre_ids ? item.genre_ids.map((id: number) => ({
+          id,
+          name: '' // Genre names not available in TMDB trending results
+        })) : [],
+        inWatchlist: false,
+      }));
+
       return reply.send({
         success: true,
-        data: (trending.results || []).slice(0, limit),
+        data: transformedResults,
         meta: {
           total: trending.total_results || 0,
           algorithm: 'trending',
