@@ -28,12 +28,21 @@ export default function HomePage() {
   // Calculate enabled condition
   const shouldFetchRecommendations = !!(conversation && !conversation.isOnboarding);
   console.log('[HomePage] Should fetch recommendations:', shouldFetchRecommendations);
+  console.error('[HomePage ERROR LOG] enabled=', shouldFetchRecommendations, 'conv=', !!conversation, 'isOnb=', conversation?.isOnboarding);
+
+  // Store in window for debugging
+  if (typeof window !== 'undefined') {
+    (window as any).DEBUG_shouldFetchRecs = shouldFetchRecommendations;
+    (window as any).DEBUG_conversation = conversation;
+  }
 
   // Only fetch recommendations if NOT in onboarding (skip the expensive LLM call for new users)
   // Wait for conversation to load first, then only fetch if not in onboarding
   const { data: recommendations, isLoading, refetch } = useRecommendations({
     enabled: shouldFetchRecommendations
   });
+
+  console.error('[HomePage ERROR] isLoading=', isLoading, 'hasData=', !!recommendations);
   const { mutate: refreshRecommendations, isPending: isRefreshing } = useRefreshRecommendations();
   const [chatMessage, setChatMessage] = useState('');
   const [chatHistory, setChatHistory] = useState<Array<{ role: string; content: string }>>([]);
@@ -214,8 +223,12 @@ export default function HomePage() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* DEBUG MARKER - Remove after debugging */}
-      <div style={{position: 'fixed', top: 0, left: 0, background: 'red', color: 'white', padding: '10px', zIndex: 99999}}>
-        HomePage RENDERED at {Date.now()}
+      <div style={{position: 'fixed', top: 0, left: 0, background: 'red', color: 'white', padding: '10px', zIndex: 99999, fontSize: '12px'}}>
+        <div>HomePage RENDERED</div>
+        <div>enabled: {String(shouldFetchRecommendations)}</div>
+        <div>hasConv: {String(!!conversation)}</div>
+        <div>isOnb: {String(conversation?.isOnboarding)}</div>
+        <div>isLoading: {String(isLoading)}</div>
       </div>
 
       {/* Loading Overlay for Recommendation Generation */}
