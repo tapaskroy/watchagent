@@ -1,6 +1,6 @@
 import { db } from '@watchagent/database';
 import { userPreferences, users, ratings, watchlistItems, conversations } from '@watchagent/database';
-import { eq, desc, gte } from 'drizzle-orm';
+import { eq, desc, gte, and } from 'drizzle-orm';
 import {
   UserPreferences,
   UpdatePreferencesRequest,
@@ -10,8 +10,15 @@ import {
   HttpStatus,
 } from '@watchagent/shared';
 import { AppError } from '../../middleware/error-handler';
+import { ConversationSummaryService } from '../conversation/conversation-summary.service';
 
 export class PreferencesService {
+  private conversationSummaryService: ConversationSummaryService;
+
+  constructor() {
+    this.conversationSummaryService = new ConversationSummaryService();
+  }
+
   /**
    * Helper function to deduplicate learned preferences
    */
@@ -71,14 +78,32 @@ export class PreferencesService {
       const conversationContext = latestConversation.context as any;
       const deduplicatedContext = this.deduplicateLearnedPreferences(conversationContext);
 
+      const updateData: any = {
+        updatedAt: new Date(),
+      };
+
       // Sync conversation context to learned preferences if not already synced
       if (JSON.stringify(deduplicatedContext) !== JSON.stringify(preferences.learnedPreferences)) {
+        updateData.learnedPreferences = deduplicatedContext;
+      }
+
+      // Auto-populate viewingPreferencesText from onboarding summary for NEW users only
+      // (only if viewingPreferencesText is empty/null)
+      // Use the already-generated summary from conversationSummary (generated in background after onboarding)
+      if (!preferences.viewingPreferencesText || preferences.viewingPreferencesText.trim() === '') {
+        const conversationSummary = preferences.conversationSummary as any;
+
+        // Check if we have an onboarding conversation summary already generated
+        if (conversationSummary?.onboardingConversation?.summary) {
+          updateData.viewingPreferencesText = conversationSummary.onboardingConversation.summary;
+        }
+      }
+
+      // Update if there are changes
+      if (Object.keys(updateData).length > 1) { // More than just updatedAt
         await db
           .update(userPreferences)
-          .set({
-            learnedPreferences: deduplicatedContext,
-            updatedAt: new Date(),
-          })
+          .set(updateData)
           .where(eq(userPreferences.userId, userId));
       }
     }
