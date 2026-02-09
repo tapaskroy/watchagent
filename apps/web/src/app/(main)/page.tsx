@@ -9,10 +9,13 @@ import type { ContentCard as ContentCardType } from '@watchagent/shared';
 
 export default function HomePage() {
   const router = useRouter();
-  // Request fresh recommendations if onboarding just completed
-  const { data: recommendations, isLoading, refetch } = useRecommendations();
-  const { mutate: refreshRecommendations, isPending: isRefreshing } = useRefreshRecommendations();
   const { conversation, initOnboardingAsync, sendMessageAsync, isSending } = useChat();
+
+  // Only fetch recommendations if NOT in onboarding (skip the expensive LLM call for new users)
+  const { data: recommendations, isLoading, refetch } = useRecommendations({
+    enabled: conversation ? !conversation.isOnboarding : true
+  });
+  const { mutate: refreshRecommendations, isPending: isRefreshing } = useRefreshRecommendations();
   const [chatMessage, setChatMessage] = useState('');
   const [chatHistory, setChatHistory] = useState<Array<{ role: string; content: string }>>([]);
   const [searchResults, setSearchResults] = useState<ContentCardType[]>([]);

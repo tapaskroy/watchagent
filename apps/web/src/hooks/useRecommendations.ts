@@ -5,12 +5,15 @@ import type {
   ContentType,
 } from '@watchagent/shared';
 
-export function useRecommendations(params?: GetRecommendationsRequest) {
+export function useRecommendations(params?: GetRecommendationsRequest & { enabled?: boolean }) {
+  const { enabled, ...queryParams } = params || {};
+
   return useQuery({
-    queryKey: ['recommendations', params],
-    queryFn: () => recommendationsApi.getPersonalizedRecommendations(params),
+    queryKey: ['recommendations', queryParams],
+    queryFn: () => recommendationsApi.getPersonalizedRecommendations(queryParams),
     staleTime: 5 * 60 * 1000,
     retry: false, // Don't retry on 401 errors
+    enabled: enabled !== false, // Default to true, only disable if explicitly false
   });
 }
 
