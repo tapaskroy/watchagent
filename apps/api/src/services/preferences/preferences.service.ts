@@ -10,15 +10,8 @@ import {
   HttpStatus,
 } from '@watchagent/shared';
 import { AppError } from '../../middleware/error-handler';
-import { ConversationSummaryService } from '../conversation/conversation-summary.service';
 
 export class PreferencesService {
-  private conversationSummaryService: ConversationSummaryService;
-
-  constructor() {
-    this.conversationSummaryService = new ConversationSummaryService();
-  }
-
   /**
    * Helper function to deduplicate learned preferences
    */
