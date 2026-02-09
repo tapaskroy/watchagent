@@ -15,7 +15,7 @@ export async function adminRoutes(app: FastifyInstance) {
         tags: ['admin'],
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (_request: FastifyRequest, reply: FastifyReply) => {
       try {
         // Delete all content from cache
         const result = await db.delete(content);
