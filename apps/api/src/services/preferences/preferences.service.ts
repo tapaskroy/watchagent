@@ -1,6 +1,6 @@
 import { db } from '@watchagent/database';
 import { userPreferences, users, ratings, watchlistItems, conversations } from '@watchagent/database';
-import { eq, desc, gte, and } from 'drizzle-orm';
+import { eq, desc, gte } from 'drizzle-orm';
 import {
   UserPreferences,
   UpdatePreferencesRequest,
