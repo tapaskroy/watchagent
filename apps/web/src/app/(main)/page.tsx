@@ -9,7 +9,7 @@ import type { ContentCard as ContentCardType } from '@watchagent/shared';
 
 export default function HomePage() {
   const router = useRouter();
-  const { conversation, initOnboardingAsync, sendMessageAsync, isSending, isLoading: isLoadingConversation } = useChat();
+  const { conversation, initOnboardingAsync, sendMessageAsync, isSending } = useChat();
 
   // Debug: Log conversation state
   useEffect(() => {
