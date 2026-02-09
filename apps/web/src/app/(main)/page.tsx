@@ -10,6 +10,11 @@ import type { ContentCard as ContentCardType } from '@watchagent/shared';
 export default function HomePage() {
   console.log('[HomePage] Component rendering');
 
+  // CRITICAL DEBUG: Force DOM manipulation to prove component renders
+  if (typeof window !== 'undefined') {
+    window.document.title = 'HomePage RENDERED - ' + Date.now();
+  }
+
   const router = useRouter();
   const { conversation, initOnboardingAsync, sendMessageAsync, isSending } = useChat();
 
@@ -208,6 +213,11 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {/* DEBUG MARKER - Remove after debugging */}
+      <div style={{position: 'fixed', top: 0, left: 0, background: 'red', color: 'white', padding: '10px', zIndex: 99999}}>
+        HomePage RENDERED at {Date.now()}
+      </div>
+
       {/* Loading Overlay for Recommendation Generation */}
       {isGeneratingRecommendations && (
         <div className="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center">
