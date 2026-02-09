@@ -8,13 +8,27 @@ import type {
 export function useRecommendations(params?: GetRecommendationsRequest & { enabled?: boolean }) {
   const { enabled, ...queryParams } = params || {};
 
-  return useQuery({
+  console.error('[useRecommendations] Called with enabled:', enabled);
+  console.error('[useRecommendations] Will pass to useQuery enabled:', enabled !== false);
+
+  const result = useQuery({
     queryKey: ['recommendations', queryParams],
-    queryFn: () => recommendationsApi.getPersonalizedRecommendations(queryParams),
+    queryFn: () => {
+      console.error('[useRecommendations] queryFn EXECUTING - fetching recommendations!');
+      return recommendationsApi.getPersonalizedRecommendations(queryParams);
+    },
     staleTime: 5 * 60 * 1000,
     retry: false, // Don't retry on 401 errors
     enabled: enabled !== false, // Default to true, only disable if explicitly false
   });
+
+  console.error('[useRecommendations] Result:', {
+    isLoading: result.isLoading,
+    isFetching: result.isFetching,
+    hasData: !!result.data
+  });
+
+  return result;
 }
 
 export function useSimilarContent(tmdbId: number, type: ContentType) {

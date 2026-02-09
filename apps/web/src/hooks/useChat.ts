@@ -4,11 +4,18 @@ import { chatApi } from '@watchagent/api-client';
 export function useChat() {
   const queryClient = useQueryClient();
 
+  console.error('[useChat] Hook called');
+
   const conversationQuery = useQuery({
     queryKey: ['chat', 'conversation'],
-    queryFn: () => chatApi.getConversation(),
+    queryFn: () => {
+      console.error('[useChat] Fetching conversation from API');
+      return chatApi.getConversation();
+    },
     retry: false, // Don't retry on 401 errors
   });
+
+  console.error('[useChat] Conversation data:', conversationQuery.data);
 
   const initOnboardingMutation = useMutation({
     mutationFn: () => chatApi.initOnboarding(),
