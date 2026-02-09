@@ -8,23 +8,26 @@ import { useRouter } from 'next/navigation';
 import type { ContentCard as ContentCardType } from '@watchagent/shared';
 
 export default function HomePage() {
+  console.log('[HomePage] Component rendering');
+
   const router = useRouter();
   const { conversation, initOnboardingAsync, sendMessageAsync, isSending } = useChat();
 
-  // Debug: Log conversation state
-  useEffect(() => {
-    console.log('[HomePage] Conversation state:', {
-      exists: !!conversation,
-      isOnboarding: conversation?.isOnboarding,
-      onboardingCompleted: conversation?.onboardingCompleted,
-      enabled: !!(conversation && !conversation.isOnboarding),
-    });
-  }, [conversation]);
+  // CRITICAL DEBUG: Log immediately when conversation changes
+  console.log('[HomePage] Conversation data:', JSON.stringify({
+    exists: !!conversation,
+    isOnboarding: conversation?.isOnboarding,
+    onboardingCompleted: conversation?.onboardingCompleted,
+  }));
+
+  // Calculate enabled condition
+  const shouldFetchRecommendations = !!(conversation && !conversation.isOnboarding);
+  console.log('[HomePage] Should fetch recommendations:', shouldFetchRecommendations);
 
   // Only fetch recommendations if NOT in onboarding (skip the expensive LLM call for new users)
   // Wait for conversation to load first, then only fetch if not in onboarding
   const { data: recommendations, isLoading, refetch } = useRecommendations({
-    enabled: !!(conversation && !conversation.isOnboarding)
+    enabled: shouldFetchRecommendations
   });
   const { mutate: refreshRecommendations, isPending: isRefreshing } = useRefreshRecommendations();
   const [chatMessage, setChatMessage] = useState('');
