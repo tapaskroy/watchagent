@@ -8,41 +8,14 @@ import { useRouter } from 'next/navigation';
 import type { ContentCard as ContentCardType } from '@watchagent/shared';
 
 export default function HomePage() {
-  console.log('[HomePage] Component rendering');
-
-  // CRITICAL DEBUG: Force DOM manipulation to prove component renders
-  if (typeof window !== 'undefined') {
-    window.document.title = 'HomePage RENDERED - ' + Date.now();
-  }
-
   const router = useRouter();
   const { conversation, initOnboardingAsync, sendMessageAsync, isSending, isLoading: isLoadingConversation } = useChat();
 
-  // CRITICAL DEBUG: Log immediately when conversation changes
-  console.log('[HomePage] Conversation data:', JSON.stringify({
-    exists: !!conversation,
-    isOnboarding: conversation?.isOnboarding,
-    onboardingCompleted: conversation?.onboardingCompleted,
-  }));
-
-  // Calculate enabled condition
-  const shouldFetchRecommendations = !!(conversation && !conversation.isOnboarding);
-  console.log('[HomePage] Should fetch recommendations:', shouldFetchRecommendations);
-  console.error('[HomePage ERROR LOG] enabled=', shouldFetchRecommendations, 'conv=', !!conversation, 'isOnb=', conversation?.isOnboarding);
-
-  // Store in window for debugging
-  if (typeof window !== 'undefined') {
-    (window as any).DEBUG_shouldFetchRecs = shouldFetchRecommendations;
-    (window as any).DEBUG_conversation = conversation;
-  }
-
   // Only fetch recommendations if NOT in onboarding (skip the expensive LLM call for new users)
-  // Wait for conversation to load first, then only fetch if not in onboarding
+  const shouldFetchRecommendations = !!(conversation && !conversation.isOnboarding);
   const { data: recommendations, isLoading: isLoadingRecommendations, refetch } = useRecommendations({
     enabled: shouldFetchRecommendations
   });
-
-  console.error('[HomePage ERROR] isLoadingRecommendations=', isLoadingRecommendations, 'hasData=', !!recommendations);
   const { mutate: refreshRecommendations, isPending: isRefreshing } = useRefreshRecommendations();
   const [chatMessage, setChatMessage] = useState('');
   const [chatHistory, setChatHistory] = useState<Array<{ role: string; content: string }>>([]);
@@ -221,19 +194,7 @@ export default function HomePage() {
     : 'Tell me what you\'re in the mood for...';
 
   return (
-    <>
-      {/* DEBUG MARKER - Always visible */}
-      <div style={{position: 'fixed', top: '50px', left: 0, background: 'red', color: 'white', padding: '10px', zIndex: 99999, fontSize: '11px', maxWidth: '300px'}}>
-        <div><strong>DEBUG INFO:</strong></div>
-        <div>enabled: {String(shouldFetchRecommendations)}</div>
-        <div>hasConv: {String(!!conversation)}</div>
-        <div>isOnb: {String(conversation?.isOnboarding)}</div>
-        <div>loadingConv: {String(isLoadingConversation)}</div>
-        <div>loadingRecs: {String(isLoadingRecommendations)}</div>
-        <div>hasRecs: {String(!!recommendations)}</div>
-      </div>
-
-      <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col">
       {/* Loading Overlay for Recommendation Generation */}
       {isGeneratingRecommendations && (
         <div className="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center">
@@ -395,6 +356,5 @@ export default function HomePage() {
         </div>
       </div>
     </div>
-    </>
   );
 }
