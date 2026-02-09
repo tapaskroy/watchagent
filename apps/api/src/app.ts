@@ -16,6 +16,7 @@ import { ratingsRoutes } from './modules/ratings/ratings.routes';
 import { recommendationsRoutes } from './modules/recommendations/recommendations.routes';
 import { chatRoutes } from './modules/chat/chat.routes';
 import { preferencesRoutes } from './modules/preferences/preferences.routes';
+import { adminRoutes } from './modules/admin/admin.routes';
 
 export async function buildApp(): Promise<FastifyInstance> {
   // Create Fastify instance
@@ -116,6 +117,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(recommendationsRoutes, { prefix: '/api/v1/recommendations' });
   await app.register(chatRoutes, { prefix: '/api/v1/chat' });
   await app.register(preferencesRoutes, { prefix: '/api/v1/preferences' });
+  await app.register(adminRoutes, { prefix: '/api/v1/admin' });
   // await app.register(userRoutes, { prefix: '/api/v1/users' });
   // await app.register(socialRoutes, { prefix: '/api/v1/social' });
 
