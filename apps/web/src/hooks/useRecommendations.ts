@@ -12,16 +12,25 @@ export function useRecommendations(params?: GetRecommendationsRequest & { enable
   console.error('[useRecommendations] Will pass to useQuery enabled:', enabled !== false);
 
   const result = useQuery({
-    queryKey: ['recommendations', queryParams],
-    queryFn: () => {
-      console.error('[useRecommendations] queryFn EXECUTING - fetching recommendations!');
+    queryKey: ['recommendations', queryParams, enabled], // Include enabled in key
+    queryFn: async () => {
+      console.error('[useRecommendations] queryFn EXECUTING - checking if should fetch...');
+
+      // CRITICAL: Double-check enabled flag inside queryFn as last line of defense
+      if (enabled === false) {
+        console.error('[useRecommendations] queryFn BLOCKED - enabled is false, returning empty array');
+        return [];
+      }
+
+      console.error('[useRecommendations] queryFn PROCEEDING - fetching recommendations!');
       return recommendationsApi.getPersonalizedRecommendations(queryParams);
     },
     staleTime: 5 * 60 * 1000,
     retry: false, // Don't retry on 401 errors
     enabled: enabled !== false, // Default to true, only disable if explicitly false
-    refetchOnWindowFocus: false, // CRITICAL: Don't refetch on focus, respect enabled parameter
-    refetchOnReconnect: false, // Also don't refetch on reconnect
+    refetchOnWindowFocus: false, // Don't refetch on focus
+    refetchOnReconnect: false, // Don't refetch on reconnect
+    refetchOnMount: false, // Don't refetch on mount if data exists
   });
 
   console.error('[useRecommendations] Result:', {
