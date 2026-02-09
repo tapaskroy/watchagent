@@ -221,16 +221,18 @@ export default function HomePage() {
     : 'Tell me what you\'re in the mood for...';
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* DEBUG MARKER - Remove after debugging */}
-      <div style={{position: 'fixed', top: 0, left: 0, background: 'red', color: 'white', padding: '10px', zIndex: 99999, fontSize: '12px'}}>
-        <div>HomePage RENDERED</div>
+    <>
+      {/* DEBUG MARKER - Always visible */}
+      <div style={{position: 'fixed', top: '50px', left: 0, background: 'red', color: 'white', padding: '10px', zIndex: 99999, fontSize: '11px', maxWidth: '300px'}}>
+        <div><strong>DEBUG INFO:</strong></div>
         <div>enabled: {String(shouldFetchRecommendations)}</div>
         <div>hasConv: {String(!!conversation)}</div>
         <div>isOnb: {String(conversation?.isOnboarding)}</div>
         <div>isLoading: {String(isLoading)}</div>
+        <div>hasRecs: {String(!!recommendations)}</div>
       </div>
 
+      <div className="min-h-screen flex flex-col">
       {/* Loading Overlay for Recommendation Generation */}
       {isGeneratingRecommendations && (
         <div className="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center">
@@ -392,5 +394,6 @@ export default function HomePage() {
         </div>
       </div>
     </div>
+    </>
   );
 }
