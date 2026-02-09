@@ -13,6 +13,9 @@ export async function runMigrations(): Promise<void> {
     // Migration 0004: Add conversation_summary and rating_patterns columns
     await runMigration0004();
 
+    // Migration 0005: Add watch_providers column
+    await runMigration0005();
+
     logger.info('✓ All migrations completed successfully');
   } catch (error) {
     logger.error('Migration failed:', error);
@@ -74,6 +77,45 @@ async function runMigration0004(): Promise<void> {
     // If error is about column already existing, ignore it
     if (error.message && error.message.includes('already exists')) {
       logger.info('Migration 0004: Columns already exist, skipping');
+      return;
+    }
+    throw error;
+  }
+}
+
+async function runMigration0005(): Promise<void> {
+  try {
+    // Check if column already exists
+    const result = await db.execute(sql`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'content'
+      AND column_name = 'watch_providers'
+    `);
+
+    if (result.rows && result.rows.length > 0) {
+      logger.info('Migration 0005: Already applied, skipping');
+      return;
+    }
+
+    logger.info('Migration 0005: Adding watch_providers column...');
+
+    // Add watch_providers column
+    await db.execute(sql`
+      ALTER TABLE content
+      ADD COLUMN IF NOT EXISTS watch_providers JSONB
+    `);
+
+    // Add comment
+    await db.execute(sql`
+      COMMENT ON COLUMN content.watch_providers IS 'Stores where to watch information (streaming, rent, buy options) from TMDB'
+    `);
+
+    logger.info('✓ Migration 0005: Completed successfully');
+  } catch (error: any) {
+    // If error is about column already existing, ignore it
+    if (error.message && error.message.includes('already exists')) {
+      logger.info('Migration 0005: Column already exists, skipping');
       return;
     }
     throw error;
