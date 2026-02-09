@@ -9,7 +9,17 @@ import type { ContentCard as ContentCardType } from '@watchagent/shared';
 
 export default function HomePage() {
   const router = useRouter();
-  const { conversation, initOnboardingAsync, sendMessageAsync, isSending } = useChat();
+  const { conversation, initOnboardingAsync, sendMessageAsync, isSending, isLoading: isLoadingConversation } = useChat();
+
+  // Debug: Log conversation state
+  useEffect(() => {
+    console.log('[HomePage] Conversation state:', {
+      exists: !!conversation,
+      isOnboarding: conversation?.isOnboarding,
+      onboardingCompleted: conversation?.onboardingCompleted,
+      enabled: !!(conversation && !conversation.isOnboarding),
+    });
+  }, [conversation]);
 
   // Only fetch recommendations if NOT in onboarding (skip the expensive LLM call for new users)
   // Wait for conversation to load first, then only fetch if not in onboarding
