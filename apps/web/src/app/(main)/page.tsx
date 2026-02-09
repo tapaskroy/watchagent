@@ -12,8 +12,9 @@ export default function HomePage() {
   const { conversation, initOnboardingAsync, sendMessageAsync, isSending } = useChat();
 
   // Only fetch recommendations if NOT in onboarding (skip the expensive LLM call for new users)
+  // Wait for conversation to load first, then only fetch if not in onboarding
   const { data: recommendations, isLoading, refetch } = useRecommendations({
-    enabled: conversation ? !conversation.isOnboarding : true
+    enabled: !!(conversation && !conversation.isOnboarding)
   });
   const { mutate: refreshRecommendations, isPending: isRefreshing } = useRefreshRecommendations();
   const [chatMessage, setChatMessage] = useState('');
