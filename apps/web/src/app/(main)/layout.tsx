@@ -9,7 +9,9 @@ export default function MainLayout({
 }: {
   children: React.ReactNode;
 }) {
+  console.log('[MainLayout] Rendering');
   const { user, logout } = useAuth();
+  console.log('[MainLayout] User:', user?.username || 'null');
 
   return (
     <div className="min-h-screen bg-background-dark">

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { AuthInitializer } from '@/components/AuthInitializer';
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  console.log('[Providers] Rendering');
   const [queryClient] = useState(
     () =>
       new QueryClient({
