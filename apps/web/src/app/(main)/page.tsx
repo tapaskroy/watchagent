@@ -107,12 +107,13 @@ export default function HomePage() {
 
   // Refetch recommendations after onboarding completes
   useEffect(() => {
-    // If user has completed onboarding (not currently in onboarding), refetch recommendations
+    // ONLY refetch if user has completed onboarding AND is no longer in onboarding
     if (conversation && !conversation.isOnboarding && conversation.onboardingCompleted) {
       console.log('Onboarding completed detected - refetching recommendations');
       refetch();
     }
-  }, [conversation?.onboardingCompleted, conversation?.isOnboarding, refetch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversation?.onboardingCompleted, conversation?.isOnboarding]);
 
   const handleContentSelect = (content: ContentCardType) => {
     router.push(`/content/${content.tmdbId}?type=${content.type}`);

@@ -20,6 +20,8 @@ export function useRecommendations(params?: GetRecommendationsRequest & { enable
     staleTime: 5 * 60 * 1000,
     retry: false, // Don't retry on 401 errors
     enabled: enabled !== false, // Default to true, only disable if explicitly false
+    refetchOnWindowFocus: false, // CRITICAL: Don't refetch on focus, respect enabled parameter
+    refetchOnReconnect: false, // Also don't refetch on reconnect
   });
 
   console.error('[useRecommendations] Result:', {
