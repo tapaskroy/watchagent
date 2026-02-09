@@ -112,8 +112,7 @@ export default function HomePage() {
       console.log('Onboarding completed detected - refetching recommendations');
       refetch();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversation?.onboardingCompleted, conversation?.isOnboarding]);
+  }, [conversation?.onboardingCompleted, conversation?.isOnboarding, refetch]);
 
   const handleContentSelect = (content: ContentCardType) => {
     router.push(`/content/${content.tmdbId}?type=${content.type}`);
