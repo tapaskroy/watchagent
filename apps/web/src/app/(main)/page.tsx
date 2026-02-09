@@ -16,7 +16,7 @@ export default function HomePage() {
   }
 
   const router = useRouter();
-  const { conversation, initOnboardingAsync, sendMessageAsync, isSending } = useChat();
+  const { conversation, initOnboardingAsync, sendMessageAsync, isSending, isLoading: isLoadingConversation } = useChat();
 
   // CRITICAL DEBUG: Log immediately when conversation changes
   console.log('[HomePage] Conversation data:', JSON.stringify({
@@ -38,11 +38,11 @@ export default function HomePage() {
 
   // Only fetch recommendations if NOT in onboarding (skip the expensive LLM call for new users)
   // Wait for conversation to load first, then only fetch if not in onboarding
-  const { data: recommendations, isLoading, refetch } = useRecommendations({
+  const { data: recommendations, isLoading: isLoadingRecommendations, refetch } = useRecommendations({
     enabled: shouldFetchRecommendations
   });
 
-  console.error('[HomePage ERROR] isLoading=', isLoading, 'hasData=', !!recommendations);
+  console.error('[HomePage ERROR] isLoadingRecommendations=', isLoadingRecommendations, 'hasData=', !!recommendations);
   const { mutate: refreshRecommendations, isPending: isRefreshing } = useRefreshRecommendations();
   const [chatMessage, setChatMessage] = useState('');
   const [chatHistory, setChatHistory] = useState<Array<{ role: string; content: string }>>([]);
@@ -228,7 +228,8 @@ export default function HomePage() {
         <div>enabled: {String(shouldFetchRecommendations)}</div>
         <div>hasConv: {String(!!conversation)}</div>
         <div>isOnb: {String(conversation?.isOnboarding)}</div>
-        <div>isLoading: {String(isLoading)}</div>
+        <div>loadingConv: {String(isLoadingConversation)}</div>
+        <div>loadingRecs: {String(isLoadingRecommendations)}</div>
         <div>hasRecs: {String(!!recommendations)}</div>
       </div>
 
@@ -248,7 +249,7 @@ export default function HomePage() {
 
       {/* Main content area - centered */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 pb-32">
-        {isLoading ? (
+        {isLoadingConversation ? (
           <Loading size="lg" />
         ) : (
           <>
