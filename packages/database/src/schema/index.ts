@@ -102,6 +102,7 @@ export const content = pgTable(
     productionCompanies: jsonb('production_companies').notNull().default([]),
     keywords: jsonb('keywords').notNull().default([]),
     trailerUrl: text('trailer_url'),
+    watchProviders: jsonb('watch_providers'), // Watch provider data (streaming, rent, buy)
     budget: integer('budget'),
     revenue: integer('revenue'),
     status: varchar('status', { length: 50 }),

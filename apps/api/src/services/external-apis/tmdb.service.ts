@@ -72,7 +72,7 @@ export class TMDBService {
     const response = await limiter.schedule(() =>
       this.client.get(`/movie/${movieId}`, {
         params: {
-          append_to_response: 'credits,keywords,videos,similar',
+          append_to_response: 'credits,keywords,videos,similar,watch/providers',
         },
       })
     );
@@ -100,7 +100,7 @@ export class TMDBService {
     const response = await limiter.schedule(() =>
       this.client.get(`/tv/${tvId}`, {
         params: {
-          append_to_response: 'credits,keywords,videos,similar',
+          append_to_response: 'credits,keywords,videos,similar,watch/providers',
         },
       })
     );

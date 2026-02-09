@@ -209,6 +209,80 @@ export default function ContentDetailPage({ params }: { params: { id: string } }
           </section>
         )}
 
+        {content.watchProviders && (content.watchProviders.flatrate || content.watchProviders.rent || content.watchProviders.buy) && (
+          <section className="mb-12">
+            <h2 className="text-2xl font-display font-bold mb-4">Where to Watch</h2>
+
+            {content.watchProviders.flatrate && content.watchProviders.flatrate.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold mb-3 text-text-secondary">Stream</h3>
+                <div className="flex flex-wrap gap-4">
+                  {content.watchProviders.flatrate.map((provider: any) => (
+                    <div key={provider.providerId} className="flex flex-col items-center gap-2">
+                      <img
+                        src={`https://image.tmdb.org/t/p/original${provider.logoPath}`}
+                        alt={provider.providerName}
+                        className="w-16 h-16 rounded-lg"
+                        title={provider.providerName}
+                      />
+                      <span className="text-xs text-center max-w-[80px] truncate">{provider.providerName}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {content.watchProviders.rent && content.watchProviders.rent.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold mb-3 text-text-secondary">Rent</h3>
+                <div className="flex flex-wrap gap-4">
+                  {content.watchProviders.rent.slice(0, 6).map((provider: any) => (
+                    <div key={provider.providerId} className="flex flex-col items-center gap-2">
+                      <img
+                        src={`https://image.tmdb.org/t/p/original${provider.logoPath}`}
+                        alt={provider.providerName}
+                        className="w-16 h-16 rounded-lg"
+                        title={provider.providerName}
+                      />
+                      <span className="text-xs text-center max-w-[80px] truncate">{provider.providerName}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {content.watchProviders.buy && content.watchProviders.buy.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold mb-3 text-text-secondary">Buy</h3>
+                <div className="flex flex-wrap gap-4">
+                  {content.watchProviders.buy.slice(0, 6).map((provider: any) => (
+                    <div key={provider.providerId} className="flex flex-col items-center gap-2">
+                      <img
+                        src={`https://image.tmdb.org/t/p/original${provider.logoPath}`}
+                        alt={provider.providerName}
+                        className="w-16 h-16 rounded-lg"
+                        title={provider.providerName}
+                      />
+                      <span className="text-xs text-center max-w-[80px] truncate">{provider.providerName}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {content.watchProviders.link && (
+              <a
+                href={content.watchProviders.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary-light hover:text-primary-lighter text-sm"
+              >
+                View all watch options →
+              </a>
+            )}
+          </section>
+        )}
+
         {content.cast && content.cast.length > 0 && (
           <section className="mb-12">
             <h2 className="text-2xl font-display font-bold mb-6">Cast</h2>

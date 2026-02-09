@@ -666,6 +666,7 @@ Generate exactly ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} recommendations. F
         productionCompanies: tmdbData.production_companies || [],
         keywords: tmdbData.keywords?.keywords || tmdbData.keywords?.results || [],
         trailerUrl: this.extractTrailerUrl(tmdbData.videos),
+        watchProviders: this.extractWatchProviders(tmdbData['watch/providers']),
         budget: type === 'movie' ? tmdbData.budget || null : null,
         revenue: type === 'movie' ? tmdbData.revenue || null : null,
         status: tmdbData.status || null,
@@ -696,6 +697,53 @@ Generate exactly ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} recommendations. F
     );
 
     return trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null;
+  }
+
+  /**
+   * Extract watch provider data from TMDB
+   */
+  private extractWatchProviders(watchProviders: any): any {
+    if (!watchProviders?.results) return null;
+
+    // Get US watch providers (you can make this configurable by region later)
+    const usProviders = watchProviders.results.US;
+    if (!usProviders) return null;
+
+    const result: any = {
+      link: usProviders.link || null,
+    };
+
+    // Transform flatrate (streaming)
+    if (usProviders.flatrate) {
+      result.flatrate = usProviders.flatrate.map((p: any) => ({
+        providerId: p.provider_id,
+        providerName: p.provider_name,
+        logoPath: p.logo_path,
+        displayPriority: p.display_priority,
+      }));
+    }
+
+    // Transform rent
+    if (usProviders.rent) {
+      result.rent = usProviders.rent.map((p: any) => ({
+        providerId: p.provider_id,
+        providerName: p.provider_name,
+        logoPath: p.logo_path,
+        displayPriority: p.display_priority,
+      }));
+    }
+
+    // Transform buy
+    if (usProviders.buy) {
+      result.buy = usProviders.buy.map((p: any) => ({
+        providerId: p.provider_id,
+        providerName: p.provider_name,
+        logoPath: p.logo_path,
+        displayPriority: p.display_priority,
+      }));
+    }
+
+    return result;
   }
 
   /**

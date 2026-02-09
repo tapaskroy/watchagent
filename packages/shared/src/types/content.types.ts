@@ -35,6 +35,22 @@ export interface ProductionCompany {
   originCountry?: string;
 }
 
+// Watch provider
+export interface WatchProvider {
+  providerId: number;
+  providerName: string;
+  logoPath: string;
+  displayPriority: number;
+}
+
+// Watch providers data
+export interface WatchProviders {
+  link?: string;
+  flatrate?: WatchProvider[];
+  rent?: WatchProvider[];
+  buy?: WatchProvider[];
+}
+
 // Content (movie or TV show)
 export interface Content {
   id: string;
@@ -59,6 +75,7 @@ export interface Content {
   productionCompanies: ProductionCompany[];
   keywords: string[];
   trailerUrl?: string;
+  watchProviders?: WatchProviders;
   budget?: number;
   revenue?: number;
   status?: string;

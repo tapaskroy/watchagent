@@ -228,6 +228,30 @@ export class ContentAggregatorService {
     );
     const trailerUrl = trailerVideo ? `https://www.youtube.com/watch?v=${trailerVideo.key}` : null;
 
+    // Extract watch providers (US only for now)
+    const watchProvidersRaw = tmdbData['watch/providers']?.results?.US;
+    const watchProviders = watchProvidersRaw ? {
+      link: watchProvidersRaw.link || null,
+      flatrate: watchProvidersRaw.flatrate?.map((p: any) => ({
+        providerId: p.provider_id,
+        providerName: p.provider_name,
+        logoPath: p.logo_path,
+        displayPriority: p.display_priority,
+      })),
+      rent: watchProvidersRaw.rent?.map((p: any) => ({
+        providerId: p.provider_id,
+        providerName: p.provider_name,
+        logoPath: p.logo_path,
+        displayPriority: p.display_priority,
+      })),
+      buy: watchProvidersRaw.buy?.map((p: any) => ({
+        providerId: p.provider_id,
+        providerName: p.provider_name,
+        logoPath: p.logo_path,
+        displayPriority: p.display_priority,
+      })),
+    } : null;
+
     return {
       tmdbId: tmdbData.id.toString(),
       imdbId: tmdbData.imdb_id || omdbData?.imdbID || null,
@@ -250,6 +274,7 @@ export class ContentAggregatorService {
       productionCompanies: tmdbData.production_companies || [],
       keywords,
       trailerUrl,
+      watchProviders,
       budget: type === 'movie' ? tmdbData.budget : null,
       revenue: type === 'movie' ? tmdbData.revenue : null,
       status: tmdbData.status,
