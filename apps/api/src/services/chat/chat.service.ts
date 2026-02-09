@@ -316,17 +316,24 @@ Keep the tone friendly and conversational. Ask open-ended questions that encoura
       // Sync conversation preferences to user preferences immediately after onboarding completes
       if (shouldCompleteOnboarding) {
         try {
-          // Sync preferences from conversation to user preferences table
+          // Sync preferences from conversation to user preferences table (fast - wait for this)
           await this.preferencesService.syncConversationPreferences(userId);
           logInfo('Synced conversation preferences to user preferences after onboarding', { userId });
 
-          // Update conversation summary
-          await this.conversationSummaryService.updateUserConversationSummary(userId);
-          logInfo('Updated conversation summary after onboarding', { userId });
-
-          // Generate fresh personalized recommendations based on learned preferences
-          await this.recommendationService.generateRecommendations(userId, true);
-          logInfo('Generated fresh recommendations after onboarding', { userId });
+          // Update conversation summary and generate recommendations in background (slow - don't wait)
+          // This prevents blocking the response while recommendations are generated
+          this.conversationSummaryService.updateUserConversationSummary(userId)
+            .then(() => {
+              logInfo('Updated conversation summary after onboarding', { userId });
+              // After summary is updated, generate recommendations
+              return this.recommendationService.generateRecommendations(userId, true);
+            })
+            .then(() => {
+              logInfo('Generated fresh recommendations after onboarding', { userId });
+            })
+            .catch((error) => {
+              logError(error as Error, { userId, service: 'ChatService.backgroundOnboardingTasks' });
+            });
         } catch (error) {
           logError(error as Error, { userId, service: 'ChatService.syncAfterOnboarding' });
           // Don't fail the whole request if sync fails

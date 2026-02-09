@@ -16,6 +16,7 @@ export default function HomePage() {
   const [chatMessage, setChatMessage] = useState('');
   const [chatHistory, setChatHistory] = useState<Array<{ role: string; content: string }>>([]);
   const [searchResults, setSearchResults] = useState<ContentCardType[]>([]);
+  const [isGeneratingRecommendations, setIsGeneratingRecommendations] = useState(false);
 
   // Restore search results from sessionStorage on mount AND on browser navigation
   useEffect(() => {
@@ -134,15 +135,46 @@ export default function HomePage() {
         sessionStorage.removeItem('watchagent_search_results');
       }
 
-      // If onboarding just completed (transitioned from false to true), refresh recommendations
+      // If onboarding just completed (transitioned from false to true), wait for recommendations
       if (result.onboardingCompleted && conversation?.isOnboarding && !conversation?.onboardingCompleted) {
-        console.log('Onboarding just completed! Refreshing recommendations...');
-        // Trigger refresh of recommendations to get personalized results
-        refreshRecommendations();
-        // Give a moment for the backend to finish generating, then reload to update conversation state
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
+        console.log('Onboarding just completed! Waiting for recommendations to be generated...');
+        setIsGeneratingRecommendations(true);
+
+        // Poll for recommendations every 3 seconds until they're ready
+        const pollRecommendations = async (attempts = 0) => {
+          const maxAttempts = 20; // Max 60 seconds (20 * 3s)
+
+          try {
+            const result = await refetch();
+
+            // Check if we got recommendations
+            if (result.data && result.data.length > 0) {
+              console.log('Recommendations ready!', result.data.length);
+              setIsGeneratingRecommendations(false);
+              window.location.reload(); // Reload to update conversation state
+            } else if (attempts < maxAttempts) {
+              // Not ready yet, try again in 3 seconds
+              console.log(`Recommendations not ready yet, retrying... (${attempts + 1}/${maxAttempts})`);
+              setTimeout(() => pollRecommendations(attempts + 1), 3000);
+            } else {
+              // Timeout after max attempts
+              console.log('Timeout waiting for recommendations');
+              setIsGeneratingRecommendations(false);
+              window.location.reload(); // Reload anyway
+            }
+          } catch (error) {
+            console.error('Error polling recommendations:', error);
+            if (attempts < maxAttempts) {
+              setTimeout(() => pollRecommendations(attempts + 1), 3000);
+            } else {
+              setIsGeneratingRecommendations(false);
+              window.location.reload();
+            }
+          }
+        };
+
+        // Start polling after a 5 second delay (give backend time to start generating)
+        setTimeout(() => pollRecommendations(), 5000);
       }
     } catch (error) {
       console.error('Failed to send message:', error);
@@ -159,82 +191,136 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {/* Loading Overlay for Recommendation Generation */}
+      {isGeneratingRecommendations && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center">
+          <Loading size="lg" />
+          <p className="mt-6 text-lg text-text-secondary">
+            Generating your personalized recommendations...
+          </p>
+          <p className="mt-2 text-sm text-text-secondary">
+            This may take up to a minute
+          </p>
+        </div>
+      )}
+
       {/* Main content area - centered */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 pb-32">
         {isLoading ? (
           <Loading size="lg" />
         ) : (
           <>
-            {/* Logo/Title */}
-            <div className="text-center mb-12">
-              <h1 className="text-5xl md:text-6xl font-display font-bold text-primary mb-3">
-                WatchAgent
-              </h1>
-              <p className="text-lg text-text-secondary mb-4">
-                What do you want to watch?
-              </p>
-              {/* Only show refresh button when NOT showing search results */}
-              {!isOnboarding && recommendations && recommendations.length > 0 && searchResults.length === 0 && (
-                <button
-                  onClick={() => refreshRecommendations()}
-                  disabled={isRefreshing}
-                  className="text-sm text-primary hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isRefreshing ? '🔄 Refreshing...' : '🔄 Refresh Recommendations'}
-                </button>
-              )}
-            </div>
+            {/* During onboarding: Full-screen chat experience */}
+            {isOnboarding ? (
+              <div className="w-full max-w-3xl flex flex-col items-center justify-center min-h-[60vh]">
+                {/* Logo/Title */}
+                <div className="text-center mb-8">
+                  <h1 className="text-5xl md:text-6xl font-display font-bold text-primary mb-3">
+                    WatchAgent
+                  </h1>
+                  <p className="text-lg text-text-secondary">
+                    Let's get to know your taste
+                  </p>
+                </div>
 
-            {/* Search Results Grid - Shown ONLY when we have search results */}
-            {searchResults.length > 0 && (
-              <div className="w-full max-w-5xl mb-8">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-semibold text-text-primary">
-                    Search Results ({searchResults.length} {searchResults.length === 1 ? 'result' : 'results'})
-                  </h2>
-                  <button
-                    onClick={handleClearSearchResults}
-                    className="text-sm text-text-secondary hover:text-text-primary transition-colors"
-                  >
-                    ✕ Clear Results
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-6 mb-6">
-                  {searchResults.map((content) => (
-                    <ContentCard
-                      key={content.id}
-                      content={content}
-                      onSelect={handleContentSelect}
-                    />
-                  ))}
-                </div>
+                {/* Full Chat History during onboarding */}
+                {chatHistory.length > 0 && (
+                  <div className="w-full bg-background-card border border-gray-800 rounded-lg p-6 max-h-[50vh] overflow-y-auto">
+                    <div className="space-y-4">
+                      {chatHistory.map((msg, idx) => (
+                        <div
+                          key={idx}
+                          className={`${
+                            msg.role === 'assistant'
+                              ? 'text-text-secondary'
+                              : 'text-text-primary font-medium bg-background-dark p-3 rounded-lg'
+                          }`}
+                        >
+                          <div className="flex gap-2">
+                            <span className="flex-shrink-0">{msg.role === 'assistant' ? '🤖' : '👤'}</span>
+                            <div className="flex-1 whitespace-pre-wrap">{msg.content}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-
-            {/* Suggestions Grid - Shown ONLY when we have NO search results */}
-            {searchResults.length === 0 && topSuggestions.length > 0 && (
-              <div className="w-full max-w-5xl mb-8">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-6">
-                  {topSuggestions.map((rec) => (
-                    <ContentCard
-                      key={rec.id}
-                      content={rec.content}
-                      onSelect={handleContentSelect}
-                      recommendationReason={rec.reason}
-                    />
-                  ))}
+            ) : (
+              <>
+                {/* After onboarding: Normal view with recommendations */}
+                {/* Logo/Title */}
+                <div className="text-center mb-12">
+                  <h1 className="text-5xl md:text-6xl font-display font-bold text-primary mb-3">
+                    WatchAgent
+                  </h1>
+                  <p className="text-lg text-text-secondary mb-4">
+                    What do you want to watch?
+                  </p>
+                  {/* Only show refresh button when NOT showing search results */}
+                  {recommendations && recommendations.length > 0 && searchResults.length === 0 && (
+                    <button
+                      onClick={() => refreshRecommendations()}
+                      disabled={isRefreshing}
+                      className="text-sm text-primary hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isRefreshing ? '🔄 Refreshing...' : '🔄 Refresh Recommendations'}
+                    </button>
+                  )}
                 </div>
 
-                {/* Show More Button */}
-                <div className="text-center">
-                  <button
-                    onClick={handleShowMore}
-                    className="text-primary hover:underline text-sm font-medium"
-                  >
-                    Show me more
-                  </button>
-                </div>
-              </div>
+                {/* Search Results Grid - Shown ONLY when we have search results */}
+                {searchResults.length > 0 && (
+                  <div className="w-full max-w-5xl mb-8">
+                    <div className="flex items-center justify-between mb-6">
+                      <h2 className="text-2xl font-semibold text-text-primary">
+                        Search Results ({searchResults.length} {searchResults.length === 1 ? 'result' : 'results'})
+                      </h2>
+                      <button
+                        onClick={handleClearSearchResults}
+                        className="text-sm text-text-secondary hover:text-text-primary transition-colors"
+                      >
+                        ✕ Clear Results
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-6 mb-6">
+                      {searchResults.map((content) => (
+                        <ContentCard
+                          key={content.id}
+                          content={content}
+                          onSelect={handleContentSelect}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Suggestions Grid - Shown ONLY when we have NO search results */}
+                {searchResults.length === 0 && topSuggestions.length > 0 && (
+                  <div className="w-full max-w-5xl mb-8">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-6">
+                      {topSuggestions.map((rec) => (
+                        <ContentCard
+                          key={rec.id}
+                          content={rec.content}
+                          onSelect={handleContentSelect}
+                          recommendationReason={rec.reason}
+                        />
+                      ))}
+                    </div>
+
+                    {/* Show More Button */}
+                    <div className="text-center">
+                      <button
+                        onClick={handleShowMore}
+                        className="text-primary hover:underline text-sm font-medium"
+                      >
+                        Show me more
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
@@ -243,25 +329,6 @@ export default function HomePage() {
       {/* Fixed Chat Section at Bottom */}
       <div className="fixed bottom-0 left-0 right-0 bg-background-dark/95 backdrop-blur-sm border-t border-gray-800">
         <div className="max-w-3xl mx-auto px-4">
-          {/* Chat History (only show if there's conversation and it's onboarding) */}
-          {isOnboarding && chatHistory.length > 0 && (
-            <div className="max-h-48 overflow-y-auto py-4 space-y-3">
-              {chatHistory.slice(-4).map((msg, idx) => (
-                <div
-                  key={idx}
-                  className={`text-sm ${
-                    msg.role === 'assistant'
-                      ? 'text-text-secondary'
-                      : 'text-text-primary font-medium'
-                  }`}
-                >
-                  {msg.role === 'assistant' ? '🤖 ' : '👤 '}
-                  {msg.content}
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* Chat Input */}
           <div className="py-4">
             <form onSubmit={handleChatSubmit} className="flex gap-3">
