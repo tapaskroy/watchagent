@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { db } from '@watchagent/database';
-import { users } from '@watchagent/database';
+import { userPreferences } from '@watchagent/database';
 import { eq } from 'drizzle-orm';
 import type { FeedbackAction } from './session-tracker.service';
 
@@ -14,14 +14,13 @@ class BatchPreferencesService {
       console.log(`[BatchPreferences] Updating preferences for user ${userId} with ${actions.length} actions`);
 
       // Get current viewing preferences
-      const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      const [userPref] = await db.select().from(userPreferences).where(eq(userPreferences.userId, userId)).limit(1);
 
-      if (!user) {
-        console.error('[BatchPreferences] User not found');
-        return false;
+      if (!userPref) {
+        console.log('[BatchPreferences] No user preferences found, will create new');
       }
 
-      const currentPreferences = user.viewingPreferencesText || '';
+      const currentPreferences = userPref?.viewingPreferencesText || '';
 
       // Build summary of actions
       const actionsSummary = this.buildActionsSummary(actions);
@@ -62,14 +61,21 @@ Return ONLY the updated viewing preferences text, nothing else.`;
 
       const updatedPreferences = message.content[0].type === 'text' ? message.content[0].text : '';
 
-      // Update database
-      await db
-        .update(users)
-        .set({
+      // Update or create user preferences
+      if (userPref) {
+        await db
+          .update(userPreferences)
+          .set({
+            viewingPreferencesText: updatedPreferences,
+            updatedAt: new Date(),
+          })
+          .where(eq(userPreferences.userId, userId));
+      } else {
+        await db.insert(userPreferences).values({
+          userId,
           viewingPreferencesText: updatedPreferences,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, userId));
+        });
+      }
 
       console.log('[BatchPreferences] Viewing preferences updated successfully');
       return true;

@@ -9,11 +9,7 @@ const feedbackSchema = z.object({
   rating: z.number().min(1).max(5).optional(),
 });
 
-type FeedbackRequest = FastifyRequest<{
-  Body: z.infer<typeof feedbackSchema>;
-}>;
-
-export async function handleRecommendationFeedback(request: FeedbackRequest, reply: FastifyReply) {
+export async function handleRecommendationFeedback(request: FastifyRequest, reply: FastifyReply) {
   try {
     const userId = request.user?.id;
     if (!userId) {
@@ -39,7 +35,7 @@ export async function handleRecommendationFeedback(request: FeedbackRequest, rep
       shouldRemoveFromUI: result.shouldRemoveFromUI,
     });
   } catch (error) {
-    request.log.error('Error processing recommendation feedback:', error);
+    request.log.error({ error }, 'Error processing recommendation feedback');
     reply.status(500).send({ error: 'Failed to process feedback' });
   }
 }

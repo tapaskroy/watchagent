@@ -1,5 +1,5 @@
 import { db } from '@watchagent/database';
-import { users, conversations, ratings, watchlistItems, content, userPreferences } from '@watchagent/database';
+import { conversations, ratings, watchlistItems, content, userPreferences } from '@watchagent/database';
 import { eq, and } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
 import { sessionTracker } from '../../services/feedback/session-tracker.service';
@@ -101,13 +101,13 @@ class FeedbackService {
 
     if (existingRating) {
       // Update existing rating
-      await db.update(ratings).set({ rating, updatedAt: new Date() }).where(eq(ratings.id, existingRating.id));
+      await db.update(ratings).set({ rating: rating.toString(), updatedAt: new Date() }).where(eq(ratings.id, existingRating.id));
     } else {
       // Create new rating
       await db.insert(ratings).values({
         userId,
         contentId,
-        rating,
+        rating: rating.toString(),
         isPublic: true,
       });
     }

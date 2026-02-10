@@ -4,7 +4,7 @@ import {
   recommendations,
   userPreferences,
 } from '@watchagent/database';
-import { eq, desc, and, gt, notInArray } from 'drizzle-orm';
+import { eq, desc, and, gt } from 'drizzle-orm';
 import { callClaude } from '../../config/anthropic';
 import { CacheService, cacheKeys } from '../../config/redis';
 import { TMDBService } from '../external-apis/tmdb.service';
