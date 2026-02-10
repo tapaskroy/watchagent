@@ -69,6 +69,7 @@ export interface EnhancedUserContext {
     watched: Array<{ title: string; rating: number; review?: string; watchedAt?: Date }>;
     watchlist: Array<{ title: string; notes?: string; priority?: number }>;
     watchlistCount: number;
+    rejectedContent: Array<{ title: string; genres: string; year: string }>;
   };
   socialContext: {
     friendsWatching: string[];

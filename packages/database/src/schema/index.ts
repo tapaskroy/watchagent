@@ -158,7 +158,7 @@ export const ratings = pgTable(
     contentId: uuid('content_id')
       .notNull()
       .references(() => content.id, { onDelete: 'cascade' }),
-    rating: decimal('rating', { precision: 3, scale: 1 }).notNull(), // 0-10 scale
+    rating: decimal('rating', { precision: 3, scale: 1 }).notNull(), // 1-5 scale
     review: text('review'),
     isPublic: boolean('is_public').notNull().default(true),
     createdAt: timestamp('created_at').notNull().defaultNow(),

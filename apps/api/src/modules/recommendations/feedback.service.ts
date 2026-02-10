@@ -34,6 +34,14 @@ class FeedbackService {
   }
 
   async processFeedback(data: FeedbackData): Promise<FeedbackResult> {
+    console.log('\n========== FEEDBACK RECEIVED ==========');
+    console.log('User ID:', data.userId);
+    console.log('Content ID:', data.contentId);
+    console.log('Content Title:', data.contentTitle);
+    console.log('Action:', data.action);
+    console.log('Rating:', data.rating || 'N/A');
+    console.log('=======================================\n');
+
     try {
       // Get content details for context
       const [contentData] = await db.select().from(content).where(eq(content.id, data.contentId)).limit(1);
@@ -206,6 +214,14 @@ Rules:
 
 Return ONLY the updated learned insights text, nothing else.`;
 
+      console.log('\n========== LEARNED INSIGHTS UPDATE - PROMPT TO SONNET ==========');
+      console.log('Model: claude-sonnet-4-20250514');
+      console.log('Max Tokens: 400');
+      console.log('Temperature: 0.7');
+      console.log('\nPROMPT:');
+      console.log(prompt);
+      console.log('================================================================\n');
+
       const message = await anthropic.messages.create({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 400,
@@ -219,6 +235,13 @@ Return ONLY the updated learned insights text, nothing else.`;
       });
 
       const updatedInsights = message.content[0].type === 'text' ? message.content[0].text : '';
+
+      console.log('\n========== LEARNED INSIGHTS UPDATE - RESPONSE FROM SONNET ==========');
+      console.log('Stop Reason:', message.stop_reason);
+      console.log('Usage:', JSON.stringify(message.usage, null, 2));
+      console.log('\nRESPONSE:');
+      console.log(updatedInsights);
+      console.log('====================================================================\n');
 
       // Update conversation context with learned insights
       const updatedContext = {

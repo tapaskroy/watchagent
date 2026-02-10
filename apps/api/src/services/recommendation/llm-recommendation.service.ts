@@ -309,7 +309,7 @@ export class LLMRecommendationService {
     const watchedList =
       context.recentActivity.watched.length > 0
         ? context.recentActivity.watched
-            .map((w) => `- "${w.title}" - Rated ${w.rating}/10${w.review ? ` - "${w.review}"` : ''}`)
+            .map((w) => `- "${w.title}" - Rated ${w.rating}/5${w.review ? ` - "${w.review}"` : ''}`)
             .join('\n')
         : 'No recent ratings';
 
@@ -338,7 +338,7 @@ export class LLMRecommendationService {
         ? Object.entries(context.ratingInsights.genrePreferences)
             .sort((a, b) => b[1] - a[1])
             .slice(0, 10)
-            .map(([genreId, avgRating]) => `- ${GENRE_NAMES[parseInt(genreId)] || genreId}: ${avgRating.toFixed(1)}/10`)
+            .map(([genreId, avgRating]) => `- ${GENRE_NAMES[parseInt(genreId)] || genreId}: ${avgRating.toFixed(1)}/5`)
             .join('\n')
         : 'Not enough rating data';
 
@@ -384,8 +384,8 @@ ${context.userProfile.dislikes.length > 0
   : 'No specific dislikes mentioned'}
 
 RATING PATTERNS (shows user's taste from ${context.ratingInsights.averageRating > 0 ? 'their ratings' : 'limited data'}):
-${context.ratingInsights.averageRating > 0 ? `Average Rating: ${context.ratingInsights.averageRating.toFixed(1)}/10
-Quality Threshold: User typically rates good content ${context.ratingInsights.qualityThreshold}+/10
+${context.ratingInsights.averageRating > 0 ? `Average Rating: ${context.ratingInsights.averageRating.toFixed(1)}/5
+Quality Threshold: User typically rates good content ${context.ratingInsights.qualityThreshold}+/5
 
 Genre Preferences (by average rating):
 ${genrePreferencesStr}` : 'Not enough ratings to analyze patterns'}
@@ -396,6 +396,13 @@ ${watchedList}
 CURRENT WATCHLIST (${context.recentActivity.watchlistCount} items):
 ${watchlistStr}
 
+REJECTED RECOMMENDATIONS (Content user marked "Not Relevant"):
+${context.recentActivity.rejectedContent.length > 0
+  ? context.recentActivity.rejectedContent
+      .map(r => `- "${r.title}" (${r.year}) - Genres: ${r.genres}`)
+      .join('\n')
+  : 'No rejected recommendations yet'}
+
 RECENT CONVERSATION INSIGHTS:
 ${context.conversationMemory.recentConversationInsights.length > 0
   ? context.conversationMemory.recentConversationInsights.map(i => `- ${i}`).join('\n')
@@ -404,8 +411,26 @@ ${context.conversationMemory.recentConversationInsights.length > 0
 SOCIAL CONTEXT:
 Friends are watching: ${friendsWatchingStr}
 
-INSTRUCTIONS:
-1. **ADAPT TO CURRENT CONTEXT** - It's ${timeContext.timeOfDay} on a ${timeContext.dayType}. Adjust recommendations accordingly:
+CRITICAL INSTRUCTIONS - WHAT NOT TO RECOMMEND:
+
+1. **DO NOT recommend content the user has already watched and rated** (listed in "RECENTLY WATCHED & RATED" above)
+   - Learn from their ratings: content rated 1-2 stars means they disliked it
+   - Avoid recommending similar content to anything they rated 1 or 2 stars
+
+2. **DO NOT recommend content already in their watchlist** (listed in "CURRENT WATCHLIST" above)
+   - However, you CAN recommend content similar to their watchlist items (they're interested in that type)
+
+3. **DO NOT recommend content the user explicitly rejected** (listed in "REJECTED RECOMMENDATIONS" above)
+   - These are titles they marked as "Not Relevant" - avoid similar content too
+   - Pay attention to the genre patterns in rejected content and avoid those combinations
+
+4. **ABSOLUTELY AVOID content matching their dislikes** (listed under "DISLIKES" above)
+
+POSITIVE INSTRUCTIONS - WHAT TO RECOMMEND:
+
+1. **USE THE ONBOARDING CONVERSATION AS YOUR PRIMARY GUIDANCE** - The user explicitly told us their preferences
+
+2. **ADAPT TO CURRENT CONTEXT** - It's ${timeContext.timeOfDay} on a ${timeContext.dayType}. Adjust recommendations accordingly:
    - Morning: Light, uplifting, inspirational
    - Afternoon: Engaging, thought-provoking
    - Evening: Their favorite genres, popular picks
@@ -413,34 +438,29 @@ INSTRUCTIONS:
    - Weekend: Longer content, binge-worthy series
    - Weekday: Shorter, easier to finish
 
-2. **USE THE ONBOARDING CONVERSATION AS YOUR PRIMARY GUIDANCE** - The user explicitly told us their preferences
-
 3. **CONSIDER THEIR ACTIVITY PATTERNS** - Last activity was ${daysSinceLastActivity}
    ${daysSinceLastActivity === 'today' || daysSinceLastActivity === 'yesterday'
      ? '- User is actively watching! Lean into their current momentum and recent interests'
      : '- User hasn\'t watched recently. Suggest compelling, can\'t-miss titles to re-engage them'}
 
-4. Pay close attention to mood preferences and ABSOLUTELY AVOID content matching their dislikes
+4. **LEARN FROM THEIR RATINGS** - They have ${context.ratingInsights.qualityThreshold >= 8 ? 'high' : context.ratingInsights.qualityThreshold >= 6 ? 'medium' : 'lenient'} standards based on their quality threshold
+   - Recommend content similar to what they rated 4-5 stars
 
-5. Consider their rating patterns - they have ${context.ratingInsights.qualityThreshold >= 8 ? 'high' : context.ratingInsights.qualityThreshold >= 6 ? 'medium' : 'lenient'} standards based on their quality threshold
+5. **REFERENCE THEIR WATCHLIST** - Items in watchlist show current interests, recommend similar content
 
-6. Reference their watchlist notes to understand intent behind saves
+6. **USE RECENT CONVERSATION INSIGHTS** - Adapt to their current mood and recent discussions
 
-7. Use recent conversation insights to adapt to their current mood
-
-8. **PROVIDE VARIETY** - Mix familiar and new:
+7. **PROVIDE VARIETY** - Mix familiar and new:
    - 40% Perfect matches to stated preferences
    - 30% Similar-but-new discoveries
    - 20% Timely picks based on current context (time/day/season)
    - 10% Pleasant surprises
 
-9. If they have strong dislikes, filter those out completely
+8. **PERSONALIZE EACH RECOMMENDATION** - Each recommendation must have a personalized reason that references their SPECIFIC preferences from the onboarding or ratings
 
-10. Each recommendation must have a personalized reason that references their SPECIFIC preferences from the onboarding or ratings
+9. **NO DUPLICATES** - Each movie/show title should appear only once in your recommendations
 
-11. **NO DUPLICATES** - Each movie/show title should appear only once in your recommendations
-
-12. **REAL MOVIES AND TV SHOWS ONLY** - Only recommend content that actually exists
+10. **REAL MOVIES AND TV SHOWS ONLY** - Only recommend content that actually exists
     - Use exact official titles from TMDB (The Movie Database)
     - Include release year to avoid confusion with remakes
     - Mix popular, critically acclaimed, and hidden gems

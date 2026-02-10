@@ -47,6 +47,15 @@ Important:
 
 Return ONLY the updated viewing preferences text, nothing else.`;
 
+      console.log('\n========== BATCH PREFERENCES UPDATE - PROMPT TO HAIKU ==========');
+      console.log('Model: claude-haiku-4-20250514');
+      console.log('Max Tokens: 500');
+      console.log('Temperature: 0.7');
+      console.log(`Actions Count: ${actions.length}`);
+      console.log('\nPROMPT:');
+      console.log(prompt);
+      console.log('================================================================\n');
+
       const message = await anthropic.messages.create({
         model: 'claude-haiku-4-20250514',
         max_tokens: 500,
@@ -60,6 +69,13 @@ Return ONLY the updated viewing preferences text, nothing else.`;
       });
 
       const updatedPreferences = message.content[0].type === 'text' ? message.content[0].text : '';
+
+      console.log('\n========== BATCH PREFERENCES UPDATE - RESPONSE FROM HAIKU ==========');
+      console.log('Stop Reason:', message.stop_reason);
+      console.log('Usage:', JSON.stringify(message.usage, null, 2));
+      console.log('\nRESPONSE:');
+      console.log(updatedPreferences);
+      console.log('====================================================================\n');
 
       // Update or create user preferences
       if (userPref) {

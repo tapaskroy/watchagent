@@ -1,5 +1,5 @@
 import { db } from '@watchagent/database';
-import { userPreferences, ratings, watchlistItems, follows } from '@watchagent/database';
+import { userPreferences, ratings, watchlistItems, follows, content } from '@watchagent/database';
 import { eq, and, desc, inArray, gt } from 'drizzle-orm';
 import {
   EnhancedUserContext,
@@ -62,6 +62,25 @@ export class UserContextService {
           content: true,
         },
       });
+
+      // Get rejected content (marked as 'not_relevant')
+      const excludedContentIds = ((prefs.learnedPreferences as any)?.excludedContent || []) as string[];
+      let rejectedContent: Array<{ title: string; genres: string; year: string }> = [];
+
+      if (excludedContentIds.length > 0) {
+        const rejectedItems = await db.query.content.findMany({
+          where: inArray(content.id, excludedContentIds),
+          limit: 50, // Limit to last 50 rejected items
+        });
+
+        rejectedContent = rejectedItems.map(item => ({
+          title: item.title,
+          genres: item.genres && Array.isArray(item.genres)
+            ? (item.genres as any[]).map((g: any) => g.name).join(', ')
+            : 'Unknown',
+          year: item.releaseDate ? new Date(item.releaseDate).getFullYear().toString() : 'Unknown',
+        }));
+      }
 
       // Get social context
       const userFollows = await db.query.follows.findMany({
@@ -128,6 +147,7 @@ export class UserContextService {
             priority: w.priority || undefined,
           })),
           watchlistCount: userWatchlist.length,
+          rejectedContent,
         },
         socialContext: {
           friendsWatching,
