@@ -2,8 +2,9 @@ import { db } from '@watchagent/database';
 import {
   content,
   recommendations,
+  userPreferences,
 } from '@watchagent/database';
-import { eq, desc, and, gt } from 'drizzle-orm';
+import { eq, desc, and, gt, notInArray } from 'drizzle-orm';
 import { callClaude } from '../../config/anthropic';
 import { CacheService, cacheKeys } from '../../config/redis';
 import { TMDBService } from '../external-apis/tmdb.service';
@@ -173,10 +174,17 @@ export class LLMRecommendationService {
    * Get cached recommendations
    */
   private async getCachedRecommendations(userId: string): Promise<Recommendation[] | null> {
+    // Get excluded content IDs
+    const excludedContentIds = await this.getExcludedContentIds(userId);
+
     // Check Redis cache first
     const cacheKey = cacheKeys.recommendations(userId);
     const cached = await CacheService.get<Recommendation[]>(cacheKey);
-    if (cached) return cached;
+    if (cached) {
+      // Filter out excluded content
+      const filtered = cached.filter(rec => !excludedContentIds.includes(rec.contentId));
+      return filtered.length > 0 ? filtered : null;
+    }
 
     // Check database for non-expired recommendations
     const dbRecommendations = await db.query.recommendations.findMany({
@@ -192,14 +200,35 @@ export class LLMRecommendationService {
     });
 
     if (dbRecommendations.length > 0) {
-      // Transform score from string to number
-      return dbRecommendations.map((rec: any) => ({
+      // Transform score from string to number and filter excluded content
+      const transformed = dbRecommendations.map((rec: any) => ({
         ...rec,
         score: parseFloat(rec.score),
       })) as Recommendation[];
+
+      const filtered = transformed.filter(rec => !excludedContentIds.includes(rec.contentId));
+      return filtered.length > 0 ? filtered : null;
     }
 
     return null;
+  }
+
+  /**
+   * Get excluded content IDs for a user
+   */
+  private async getExcludedContentIds(userId: string): Promise<string[]> {
+    const [userPref] = await db
+      .select()
+      .from(userPreferences)
+      .where(eq(userPreferences.userId, userId))
+      .limit(1);
+
+    if (userPref && userPref.learnedPreferences) {
+      const excludedContent = (userPref.learnedPreferences as any)?.excludedContent;
+      return Array.isArray(excludedContent) ? excludedContent : [];
+    }
+
+    return [];
   }
 
   /**

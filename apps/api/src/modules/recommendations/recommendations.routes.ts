@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { LLMRecommendationService } from '../../services/recommendation/llm-recommendation.service';
 import { TMDBService } from '../../services/external-apis/tmdb.service';
 import { getRecommendationsSchema, GetRecommendationsRequest } from '@watchagent/shared';
+import { handleRecommendationFeedback } from './feedback.controller';
 
 export async function recommendationsRoutes(app: FastifyInstance) {
   const recommendationService = new LLMRecommendationService();
@@ -217,5 +218,32 @@ export async function recommendationsRoutes(app: FastifyInstance) {
         },
       });
     }
+  );
+
+  /**
+   * POST /api/v1/recommendations/feedback
+   * Submit feedback on a recommendation
+   */
+  app.post(
+    '/feedback',
+    {
+      onRequest: [app.authenticate],
+      schema: {
+        description: 'Submit feedback on a recommendation to update user preferences',
+        tags: ['recommendations'],
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: 'object',
+          required: ['contentId', 'contentTitle', 'action'],
+          properties: {
+            contentId: { type: 'string', format: 'uuid' },
+            contentTitle: { type: 'string' },
+            action: { type: 'string', enum: ['not_relevant', 'keep', 'watchlist', 'watched'] },
+            rating: { type: 'number', minimum: 1, maximum: 5 },
+          },
+        },
+      },
+    },
+    handleRecommendationFeedback
   );
 }

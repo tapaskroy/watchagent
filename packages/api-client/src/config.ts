@@ -51,6 +51,7 @@ export const API_ENDPOINTS = {
     similar: (tmdbId: number) => `/recommendations/similar/${tmdbId}`,
     trending: '/recommendations/trending',
     refresh: '/recommendations/refresh',
+    feedback: '/recommendations/feedback',
   },
   chat: {
     conversation: '/chat/conversation',

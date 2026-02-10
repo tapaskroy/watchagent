@@ -73,4 +73,35 @@ export const recommendationsApi = {
 
     throw new Error(response.data.error?.message || 'Failed to refresh recommendations');
   },
+
+  async submitFeedback(data: {
+    contentId: string;
+    contentTitle: string;
+    action: 'not_relevant' | 'keep' | 'watchlist' | 'watched';
+    rating?: number;
+  }): Promise<{
+    success: boolean;
+    preferencesUpdated: boolean;
+    learnedInsightsUpdated: boolean;
+    shouldRemoveFromUI: boolean;
+  }> {
+    const response = await apiClient.post<{
+      success: boolean;
+      message: string;
+      preferencesUpdated: boolean;
+      learnedInsightsUpdated: boolean;
+      shouldRemoveFromUI: boolean;
+    }>(API_ENDPOINTS.recommendations.feedback, data);
+
+    if (response.data.success) {
+      return {
+        success: true,
+        preferencesUpdated: response.data.preferencesUpdated ?? false,
+        learnedInsightsUpdated: response.data.learnedInsightsUpdated ?? false,
+        shouldRemoveFromUI: response.data.shouldRemoveFromUI ?? false,
+      };
+    }
+
+    throw new Error('Failed to submit feedback');
+  },
 };

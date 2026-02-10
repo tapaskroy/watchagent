@@ -29,3 +29,6 @@ export type { ToastProps } from './components/feedback/Toast';
 
 export { ContentCard } from './components/cards/ContentCard';
 export type { ContentCardProps } from './components/cards/ContentCard';
+
+export { ContentCardWithFeedback } from './components/cards/ContentCardWithFeedback';
+export type { ContentCardFeedbackProps } from './components/cards/ContentCardWithFeedback';

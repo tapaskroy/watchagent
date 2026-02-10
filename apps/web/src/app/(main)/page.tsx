@@ -1,14 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ContentCard, Loading } from '@watchagent/ui';
+import { ContentCard, ContentCardWithFeedback, Loading } from '@watchagent/ui';
 import { useRecommendations, useRefreshRecommendations } from '@/hooks/useRecommendations';
 import { useChat } from '@/hooks/useChat';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import type { ContentCard as ContentCardType } from '@watchagent/shared';
 
 export default function HomePage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { conversation, initOnboardingAsync, sendMessageAsync, isSending, isLoading: isLoadingConversation } = useChat();
 
   // Only fetch recommendations if NOT in onboarding (skip the expensive LLM call for new users)
@@ -187,6 +189,55 @@ export default function HomePage() {
     }
   };
 
+  const handleRemove = async (content: ContentCardType, reason: 'not_relevant' | 'watched', rating?: number) => {
+    try {
+      const { recommendationsApi } = await import('@watchagent/api-client');
+      const result = await recommendationsApi.submitFeedback({
+        contentId: content.id,
+        contentTitle: content.title,
+        action: reason,
+        rating,
+      });
+
+      if (result.shouldRemoveFromUI) {
+        // Immediately remove from UI by updating the query cache
+        queryClient.setQueryData(['recommendations', {}], (old: any) => {
+          if (!old) return old;
+          return old.filter((rec: any) => rec.contentId !== content.id);
+        });
+
+        // Invalidate the query to trigger a re-render with the updated cache
+        queryClient.invalidateQueries({ queryKey: ['recommendations'], refetchType: 'none' });
+      }
+    } catch (error) {
+      console.error('Failed to submit feedback:', error);
+    }
+  };
+
+  const handleKeep = async (content: ContentCardType, action: 'keep' | 'watchlist') => {
+    try {
+      const { recommendationsApi } = await import('@watchagent/api-client');
+      const result = await recommendationsApi.submitFeedback({
+        contentId: content.id,
+        contentTitle: content.title,
+        action,
+      });
+
+      if (result.shouldRemoveFromUI) {
+        // Immediately remove from UI by updating the query cache
+        queryClient.setQueryData(['recommendations', {}], (old: any) => {
+          if (!old) return old;
+          return old.filter((rec: any) => rec.contentId !== content.id);
+        });
+
+        // Invalidate the query to trigger a re-render with the updated cache
+        queryClient.invalidateQueries({ queryKey: ['recommendations'], refetchType: 'none' });
+      }
+    } catch (error) {
+      console.error('Failed to submit feedback:', error);
+    }
+  };
+
   const topSuggestions = recommendations?.slice(0, 4) || [];
   const isOnboarding = conversation?.isOnboarding && !conversation?.onboardingCompleted;
   const placeholder = isOnboarding
@@ -304,11 +355,13 @@ export default function HomePage() {
                   <div className="w-full max-w-5xl mb-8">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-6">
                       {topSuggestions.map((rec) => (
-                        <ContentCard
+                        <ContentCardWithFeedback
                           key={rec.id}
                           content={rec.content}
                           onSelect={handleContentSelect}
                           recommendationReason={rec.reason}
+                          onRemove={handleRemove}
+                          onKeep={handleKeep}
                         />
                       ))}
                     </div>

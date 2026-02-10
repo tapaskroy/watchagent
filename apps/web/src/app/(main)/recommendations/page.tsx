@@ -1,13 +1,15 @@
 'use client';
 
-import { Container, Loading, EmptyState, Button } from '@watchagent/ui';
+import { Container, Loading, EmptyState, Button, ContentCardWithFeedback } from '@watchagent/ui';
 import { useRecommendations, useRefreshRecommendations } from '@/hooks/useRecommendations';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import type { ContentCard as ContentCardType } from '@watchagent/shared';
 
 export default function RecommendationsPage() {
   const router = useRouter();
-  const { data: recommendations, isLoading } = useRecommendations();
+  const queryClient = useQueryClient();
+  const { data: recommendations, isLoading, refetch } = useRecommendations();
   const { mutate: refresh, isPending: isRefreshing } = useRefreshRecommendations();
 
   const handleContentSelect = (content: ContentCardType) => {
@@ -16,6 +18,56 @@ export default function RecommendationsPage() {
 
   const handleRefresh = () => {
     refresh();
+  };
+
+  const handleRemove = async (content: ContentCardType, reason: 'not_relevant' | 'watched', rating?: number) => {
+    try {
+      const { recommendationsApi } = await import('@watchagent/api-client');
+
+      const result = await recommendationsApi.submitFeedback({
+        contentId: content.id,
+        contentTitle: content.title,
+        action: reason,
+        rating,
+      });
+
+      if (result.shouldRemoveFromUI) {
+        // Immediately remove from UI by updating the query cache
+        queryClient.setQueryData(['recommendations', {}], (old: any) => {
+          if (!old) return old;
+          return old.filter((rec: any) => rec.contentId !== content.id);
+        });
+
+        // Invalidate the query to trigger a re-render with the updated cache
+        queryClient.invalidateQueries({ queryKey: ['recommendations'], refetchType: 'none' });
+      }
+    } catch (error) {
+      console.error('Failed to submit feedback:', error);
+    }
+  };
+
+  const handleKeep = async (content: ContentCardType, action: 'keep' | 'watchlist') => {
+    try {
+      const { recommendationsApi } = await import('@watchagent/api-client');
+      const result = await recommendationsApi.submitFeedback({
+        contentId: content.id,
+        contentTitle: content.title,
+        action,
+      });
+
+      if (result.shouldRemoveFromUI) {
+        // Immediately remove from UI by updating the query cache
+        queryClient.setQueryData(['recommendations', {}], (old: any) => {
+          if (!old) return old;
+          return old.filter((rec: any) => rec.contentId !== content.id);
+        });
+
+        // Invalidate the query to trigger a re-render with the updated cache
+        queryClient.invalidateQueries({ queryKey: ['recommendations'], refetchType: 'none' });
+      }
+    } catch (error) {
+      console.error('Failed to submit feedback:', error);
+    }
   };
 
   return (
@@ -44,66 +96,16 @@ export default function RecommendationsPage() {
         {isLoading && <Loading text="Loading recommendations..." />}
 
         {!isLoading && recommendations && recommendations.length > 0 && (
-          <div className="space-y-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
             {recommendations.map((rec) => (
-              <div
+              <ContentCardWithFeedback
                 key={rec.id}
-                className="bg-background-card rounded-lg p-6 hover:bg-background-hover transition-colors cursor-pointer"
-                onClick={() => handleContentSelect(rec.content)}
-              >
-                <div className="flex gap-6">
-                  <div className="flex-shrink-0 w-32">
-                    <img
-                      src={
-                        rec.content.posterPath
-                          ? `https://image.tmdb.org/t/p/w200${rec.content.posterPath}`
-                          : '/placeholder-poster.png'
-                      }
-                      alt={rec.content.title}
-                      className="w-full rounded-lg"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-semibold mb-2">
-                      {rec.content.title}
-                    </h3>
-                    <div className="flex items-center gap-4 mb-3 text-sm text-text-secondary">
-                      {rec.content.releaseDate && (
-                        <span>
-                          {new Date(rec.content.releaseDate).getFullYear()}
-                        </span>
-                      )}
-                      {rec.content.tmdbRating && (
-                        <div className="flex items-center gap-1">
-                          <svg
-                            className="w-4 h-4 fill-current text-yellow-400"
-                            viewBox="0 0 20 20"
-                          >
-                            <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z" />
-                          </svg>
-                          <span>{Number(rec.content.tmdbRating).toFixed(1)}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-1">
-                        <span className="text-accent-green">
-                          {Math.round(rec.score * 100)}% Match
-                        </span>
-                      </div>
-                    </div>
-                    <p className="text-text-secondary mb-3">{rec.reason}</p>
-                    <div className="flex flex-wrap gap-2">
-                      {rec.content.genres.slice(0, 3).map((genre) => (
-                        <span
-                          key={genre.id}
-                          className="px-3 py-1 bg-background-dark rounded-full text-xs"
-                        >
-                          {genre.name}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
+                content={rec.content}
+                onSelect={handleContentSelect}
+                recommendationReason={rec.reason}
+                onRemove={handleRemove}
+                onKeep={handleKeep}
+              />
             ))}
           </div>
         )}
