@@ -9,7 +9,7 @@ import type { ContentCard as ContentCardType } from '@watchagent/shared';
 export default function RecommendationsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { data: recommendations, isLoading, refetch } = useRecommendations();
+  const { data: recommendations, isLoading } = useRecommendations();
   const { mutate: refresh, isPending: isRefreshing } = useRefreshRecommendations();
 
   const handleContentSelect = (content: ContentCardType) => {
