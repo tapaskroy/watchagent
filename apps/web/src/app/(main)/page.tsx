@@ -15,7 +15,7 @@ export default function HomePage() {
 
   // Only fetch recommendations if NOT in onboarding (skip the expensive LLM call for new users)
   const shouldFetchRecommendations = !!(conversation && !conversation.isOnboarding);
-  const { data: recommendations, isLoading: isLoadingRecommendations, refetch } = useRecommendations({
+  const { data: recommendations, refetch } = useRecommendations({
     enabled: shouldFetchRecommendations
   });
   const { mutate: refreshRecommendations, isPending: isRefreshing } = useRefreshRecommendations();
