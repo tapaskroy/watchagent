@@ -33,6 +33,74 @@ class FeedbackService {
     });
   }
 
+  /**
+   * Resolve tmdbId to internal content UUID, creating content if needed
+   */
+  async resolveContentId(tmdbId: string, type: 'movie' | 'tv'): Promise<string | null> {
+    try {
+      // Check if content exists in database
+      const [existingContent] = await db
+        .select()
+        .from(content)
+        .where(eq(content.tmdbId, tmdbId))
+        .limit(1);
+
+      if (existingContent) {
+        return existingContent.id;
+      }
+
+      // Content doesn't exist, fetch from TMDB and create it
+      const { TMDBService } = await import('../../services/external-apis/tmdb.service');
+      const tmdbService = new TMDBService();
+
+      let tmdbData;
+      if (type === 'movie') {
+        tmdbData = await tmdbService.getMovieDetails(tmdbId);
+      } else {
+        tmdbData = await tmdbService.getTVDetails(tmdbId);
+      }
+
+      if (!tmdbData) {
+        console.error(`Failed to fetch content from TMDB: ${tmdbId}`);
+        return null;
+      }
+
+      // Create content in database
+      // Note: TMDB API returns snake_case, so we need to map the fields
+      const [newContent] = await db
+        .insert(content)
+        .values({
+          tmdbId: tmdbId,
+          imdbId: tmdbData.imdb_id || null,
+          type: type,
+          title: tmdbData.title || tmdbData.name,
+          originalTitle: tmdbData.original_title || tmdbData.original_name,
+          overview: tmdbData.overview,
+          releaseDate: tmdbData.release_date || tmdbData.first_air_date,
+          runtime: tmdbData.runtime,
+          genres: tmdbData.genres || [],
+          posterPath: tmdbData.poster_path,
+          backdropPath: tmdbData.backdrop_path,
+          tmdbRating: tmdbData.vote_average?.toString(),
+          tmdbVoteCount: tmdbData.vote_count,
+          popularity: tmdbData.popularity?.toString(),
+          language: tmdbData.original_language,
+          cast: tmdbData.credits?.cast || [],
+          crew: tmdbData.credits?.crew || [],
+          productionCompanies: tmdbData.production_companies || [],
+          keywords: tmdbData.keywords?.keywords || tmdbData.keywords?.results || [],
+          numberOfSeasons: tmdbData.number_of_seasons,
+          numberOfEpisodes: tmdbData.number_of_episodes,
+        })
+        .returning();
+
+      return newContent.id;
+    } catch (error) {
+      console.error('Error resolving content ID:', error);
+      return null;
+    }
+  }
+
   async processFeedback(data: FeedbackData): Promise<FeedbackResult> {
     console.log('\n========== FEEDBACK RECEIVED ==========');
     console.log('User ID:', data.userId);

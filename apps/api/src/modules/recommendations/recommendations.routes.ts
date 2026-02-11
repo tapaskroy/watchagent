@@ -234,9 +234,11 @@ export async function recommendationsRoutes(app: FastifyInstance) {
         security: [{ bearerAuth: [] }],
         body: {
           type: 'object',
-          required: ['contentId', 'contentTitle', 'action'],
+          required: ['contentTitle', 'action'],
           properties: {
-            contentId: { type: 'string', format: 'uuid' },
+            contentId: { type: 'string' },
+            tmdbId: { type: 'string' },
+            type: { type: 'string', enum: ['movie', 'tv'] },
             contentTitle: { type: 'string' },
             action: { type: 'string', enum: ['not_relevant', 'keep', 'watchlist', 'watched'] },
             rating: { type: 'number', minimum: 1, maximum: 5 },

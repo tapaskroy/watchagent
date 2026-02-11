@@ -1,60 +1,71 @@
 'use client';
 
 import { useState } from 'react';
-import { ContentCard, Loading, Toast } from '@watchagent/ui';
+import { ContentCardWithFeedback, Loading, Toast } from '@watchagent/ui';
 import { useTrending, usePopular } from '@/hooks/useContent';
 import { useRouter } from 'next/navigation';
 import type { ContentCard as ContentCardType } from '@watchagent/shared';
-import { useWatchlist } from '@/hooks/useWatchlist';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function BrowsePage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: trendingMovies, isLoading: loadingTrending } = useTrending('movie');
   const { data: popularMovies, isLoading: loadingPopular } = usePopular('movie');
-  const { addToWatchlistMutation } = useWatchlist();
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   const handleContentSelect = (content: ContentCardType) => {
     router.push(`/content/${content.tmdbId}?type=${content.type}`);
   };
 
-  const handleWatchlist = (content: ContentCardType) => {
-    addToWatchlistMutation.mutate(
-      {
+  const handleRemove = async (content: ContentCardType, reason: 'not_relevant' | 'watched', rating?: number) => {
+    try {
+      const { recommendationsApi } = await import('@watchagent/api-client');
+      await recommendationsApi.submitFeedback({
         tmdbId: content.tmdbId,
         type: content.type,
-        title: content.title,
-        posterPath: content.posterPath,
-        releaseDate: content.releaseDate,
-        genres: content.genres,
-        rating: content.tmdbRating,
-        status: 'to_watch',
-      },
-      {
-        onSuccess: () => {
-          setToast({ message: `Added "${content.title}" to your watchlist`, type: 'success' });
-        },
-        onError: (error: any) => {
-          console.error('Failed to add to watchlist:', error);
-          setToast({
-            message: `Failed to add "${content.title}": ${error.message || 'Unknown error'}`,
-            type: 'error'
-          });
-        },
+        contentTitle: content.title,
+        action: reason,
+        rating,
+      });
+
+      // Remove from UI by updating the query cache
+      queryClient.setQueryData(['trending', 'movie'], (old: any) => {
+        if (!old) return old;
+        return old.filter((item: any) => item.tmdbId !== content.tmdbId);
+      });
+
+      queryClient.setQueryData(['popular', 'movie'], (old: any) => {
+        if (!old) return old;
+        return old.filter((item: any) => item.tmdbId !== content.tmdbId);
+      });
+
+      // Invalidate to trigger re-render
+      queryClient.invalidateQueries({ queryKey: ['trending'], refetchType: 'none' });
+      queryClient.invalidateQueries({ queryKey: ['popular'], refetchType: 'none' });
+    } catch (error) {
+      console.error('Failed to submit feedback:', error);
+      setToast({ message: 'Failed to submit feedback', type: 'error' });
+    }
+  };
+
+  const handleKeep = async (content: ContentCardType, action: 'keep' | 'watchlist') => {
+    try {
+      const { recommendationsApi } = await import('@watchagent/api-client');
+      await recommendationsApi.submitFeedback({
+        tmdbId: content.tmdbId,
+        type: content.type,
+        contentTitle: content.title,
+        action,
+      });
+
+      if (action === 'watchlist') {
+        setToast({ message: `Added "${content.title}" to your watchlist`, type: 'success' });
       }
-    );
-  };
-
-  const handleLove = (content: ContentCardType) => {
-    // TODO: Call preference learning API
-    console.log('Loved:', content.title);
-    setToast({ message: `Great! We'll recommend more like "${content.title}"`, type: 'success' });
-  };
-
-  const handleHate = (content: ContentCardType) => {
-    // TODO: Call preference learning API
-    console.log('Passed on:', content.title);
-    setToast({ message: `Got it! We'll show you less content like this`, type: 'info' });
+    } catch (error) {
+      console.error('Failed to submit feedback:', error);
+      setToast({ message: 'Failed to submit feedback', type: 'error' });
+    }
   };
 
   const isLoading = loadingTrending || loadingPopular;
@@ -84,14 +95,12 @@ export default function BrowsePage() {
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {Array.isArray(trendingMovies) && trendingMovies.slice(0, 12).map((movie) => (
-              <ContentCard
+              <ContentCardWithFeedback
                 key={movie.tmdbId}
                 content={movie}
                 onSelect={handleContentSelect}
-                showActions={true}
-                onWatchlist={handleWatchlist}
-                onLove={handleLove}
-                onHate={handleHate}
+                onRemove={handleRemove}
+                onKeep={handleKeep}
               />
             ))}
           </div>
@@ -104,14 +113,12 @@ export default function BrowsePage() {
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {Array.isArray(popularMovies) && popularMovies.slice(0, 12).map((movie) => (
-              <ContentCard
+              <ContentCardWithFeedback
                 key={movie.tmdbId}
                 content={movie}
                 onSelect={handleContentSelect}
-                showActions={true}
-                onWatchlist={handleWatchlist}
-                onLove={handleLove}
-                onHate={handleHate}
+                onRemove={handleRemove}
+                onKeep={handleKeep}
               />
             ))}
           </div>

@@ -75,7 +75,9 @@ export const recommendationsApi = {
   },
 
   async submitFeedback(data: {
-    contentId: string;
+    contentId?: string;
+    tmdbId?: string;
+    type?: ContentType;
     contentTitle: string;
     action: 'not_relevant' | 'keep' | 'watchlist' | 'watched';
     rating?: number;
