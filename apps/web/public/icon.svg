@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Background circle -->
+  <circle cx="32" cy="32" r="32" fill="#1a1a1a"/>
+
+  <!-- Outer glow circle -->
+  <circle cx="32" cy="32" r="28" fill="none" stroke="#ef4444" stroke-width="1.5" opacity="0.3"/>
+
+  <!-- Play button triangle -->
+  <path d="M 24 18 L 24 46 L 46 32 Z" fill="#ef4444"/>
+
+  <!-- AI sparkle dots -->
+  <circle cx="42" cy="20" r="2" fill="#ef4444" opacity="0.8"/>
+  <circle cx="47" cy="24" r="1.5" fill="#ef4444" opacity="0.6"/>
+  <circle cx="44" cy="28" r="1" fill="#ef4444" opacity="0.4"/>
+</svg>

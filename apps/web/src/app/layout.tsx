@@ -20,6 +20,10 @@ export const metadata: Metadata = {
   title: 'WatchAgent - Your Personalized Entertainment Companion',
   description:
     'Discover movies and TV shows tailored to your taste with AI-powered recommendations',
+  icons: {
+    icon: '/icon.svg',
+    apple: '/apple-icon.svg',
+  },
 };
 
 export default function RootLayout({
