@@ -36,7 +36,7 @@ class FeedbackService {
   /**
    * Resolve tmdbId to internal content UUID, creating content if needed
    */
-  async resolveContentId(tmdbId: string, type: 'movie' | 'tv'): Promise<string | null> {
+  async resolveContentId(tmdbId: string, type: 'movie' | 'tv'): Promise<string | undefined> {
     try {
       // Check if content exists in database
       const [existingContent] = await db
@@ -62,7 +62,7 @@ class FeedbackService {
 
       if (!tmdbData) {
         console.error(`Failed to fetch content from TMDB: ${tmdbId}`);
-        return null;
+        return undefined;
       }
 
       // Create content in database
@@ -97,7 +97,7 @@ class FeedbackService {
       return newContent.id;
     } catch (error) {
       console.error('Error resolving content ID:', error);
-      return null;
+      return undefined;
     }
   }
 
