@@ -1,5 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { ChatService } from '../../services/chat/chat.service';
+import { chatSessionService } from '../../services/chat/chat-session.service';
+import type { InteractiveChatRequest } from '@watchagent/shared';
 
 const chatService = new ChatService();
 
@@ -190,6 +192,155 @@ export async function chatRoutes(app: FastifyInstance) {
       });
 
       return reply.send(responseData);
+    }
+  );
+
+  /**
+   * POST /api/v1/chat/interactive
+   * Interactive chat with session management
+   */
+  app.post<{
+    Body: InteractiveChatRequest;
+  }>(
+    '/interactive',
+    {
+      preHandler: [app.authenticate],
+      schema: {
+        description: 'Send a message with session context and get interactive response',
+        tags: ['chat'],
+        body: {
+          type: 'object',
+          required: ['userId', 'message'],
+          properties: {
+            userId: { type: 'string' },
+            sessionId: { type: 'string' },
+            message: { type: 'string' },
+            currentScreenState: {
+              type: 'object',
+              properties: {
+                visibleItems: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' },
+                      tmdbId: { type: 'string' },
+                      title: { type: 'string' },
+                    },
+                  },
+                },
+                appliedFilters: { type: 'object' },
+              },
+            },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              data: {
+                type: 'object',
+                properties: {
+                  sessionId: { type: 'string' },
+                  response: {
+                    type: 'object',
+                    properties: {
+                      message: { type: 'string' },
+                      action: {
+                        type: 'object',
+                        properties: {
+                          type: { type: 'string' },
+                          items: { type: 'array' },
+                          filters: { type: 'object' },
+                        },
+                      },
+                      suggestions: { type: 'array', items: { type: 'string' } },
+                    },
+                  },
+                  conversationHistory: { type: 'array' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Body: InteractiveChatRequest }>, reply: FastifyReply) => {
+      const userId = (request.user as any).id;
+      const { sessionId, message, currentScreenState } = request.body;
+
+      try {
+        // Get or create session
+        let session;
+        if (sessionId) {
+          session = await chatSessionService.getSession(sessionId);
+          if (!session) {
+            return reply.status(404).send({
+              success: false,
+              error: 'Session not found or expired',
+            });
+          }
+        } else {
+          // Create new session
+          session = await chatSessionService.createSession(userId);
+        }
+
+        // Add user message to session
+        const userMessage = {
+          role: 'user' as const,
+          content: message,
+          timestamp: new Date(),
+        };
+
+        await chatSessionService.addMessage(session.sessionId, userMessage);
+
+        // Update current results if provided
+        if (currentScreenState) {
+          await chatSessionService.updateCurrentResults(session.sessionId, {
+            type: 'search',
+            items: currentScreenState.visibleItems,
+            filters: currentScreenState.appliedFilters,
+            query: message,
+          });
+        }
+
+        // For Phase 1, just return a simple response acknowledging the message
+        // Phase 2 will add intent classification and intelligent responses
+        const assistantMessage = {
+          role: 'assistant' as const,
+          content: `I received your message: "${message}". Session-based chat is now active! (Phase 1 - basic session tracking)`,
+          timestamp: new Date(),
+        };
+
+        await chatSessionService.addMessage(session.sessionId, assistantMessage);
+
+        // Get updated session
+        const updatedSession = await chatSessionService.getSession(session.sessionId);
+
+        return reply.send({
+          success: true,
+          data: {
+            sessionId: session.sessionId,
+            response: {
+              message: assistantMessage.content,
+              action: {
+                type: 'none',
+                items: currentScreenState?.visibleItems || [],
+                filters: currentScreenState?.appliedFilters || {},
+              },
+              suggestions: ['Tell me more', 'Show me something different', 'Filter by genre'],
+            },
+            conversationHistory: updatedSession?.messages || [],
+          },
+        });
+      } catch (error) {
+        console.error('Interactive chat error:', error);
+        return reply.status(500).send({
+          success: false,
+          error: 'Failed to process interactive chat message',
+        });
+      }
     }
   );
 }

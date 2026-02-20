@@ -63,12 +63,12 @@ export const IMAGE_SIZES = {
   },
 } as const;
 
-// Claude AI Model - Using Claude 3.5 Haiku (latest, faster and smarter)
-export const CLAUDE_MODEL = 'claude-3-5-haiku-20241022';
+// Claude AI Model - Using Claude 3 Haiku (3.5 not available on this API key)
+export const CLAUDE_MODEL = 'claude-3-haiku-20240307';
 
 // Recommendation settings
 export const RECOMMENDATION_CONFIG = {
-  LLM_MODEL: 'claude-3-5-haiku-20241022', // Using Claude 3.5 Haiku for better quality
+  LLM_MODEL: 'claude-3-haiku-20240307', // Using Claude 3 Haiku (3.5 not available)
   MAX_RECOMMENDATIONS: 20,
   CANDIDATE_POOL_SIZE: 500,
   REFRESH_INTERVAL_HOURS: 12,

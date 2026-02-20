@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ContentCard, ContentCardWithFeedback, Loading } from '@watchagent/ui';
 import { useRecommendations, useRefreshRecommendations } from '@/hooks/useRecommendations';
 import { useChat } from '@/hooks/useChat';
@@ -21,6 +21,7 @@ export default function HomePage() {
   const { mutate: refreshRecommendations, isPending: isRefreshing } = useRefreshRecommendations();
   const [chatMessage, setChatMessage] = useState('');
   const [chatHistory, setChatHistory] = useState<Array<{ role: string; content: string }>>([]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [searchResults, setSearchResults] = useState<ContentCardType[]>([]);
   const [isGeneratingRecommendations, setIsGeneratingRecommendations] = useState(false);
 
@@ -88,6 +89,14 @@ export default function HomePage() {
       refetch();
     }
   }, [conversation?.onboardingCompleted, conversation?.isOnboarding, refetch]);
+
+  // Auto-resize textarea when message changes (e.g., when cleared)
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+    }
+  }, [chatMessage]);
 
   const handleContentSelect = (content: ContentCardType) => {
     router.push(`/content/${content.tmdbId}?type=${content.type}`);
@@ -388,23 +397,40 @@ export default function HomePage() {
         <div className="max-w-3xl mx-auto px-4">
           {/* Chat Input */}
           <div className="py-4">
-            <form onSubmit={handleChatSubmit} className="flex gap-3">
-              <input
-                type="text"
+            <form onSubmit={handleChatSubmit} className="flex items-end gap-3">
+              <textarea
+                ref={textareaRef}
                 value={chatMessage}
-                onChange={(e) => setChatMessage(e.target.value)}
+                onChange={(e) => {
+                  setChatMessage(e.target.value);
+                  // Auto-resize textarea
+                  e.target.style.height = 'auto';
+                  e.target.style.height = e.target.scrollHeight + 'px';
+                }}
+                onKeyDown={(e) => {
+                  // Submit on Enter (without Shift)
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleChatSubmit(e as any);
+                  }
+                }}
                 placeholder={placeholder}
                 disabled={isSending}
-                className="flex-1 px-5 py-3 bg-background-card text-text-primary border border-gray-700 rounded-full focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent placeholder-text-secondary disabled:opacity-50"
+                rows={1}
+                className="flex-1 px-5 py-3 bg-background-card text-text-primary border border-gray-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent placeholder-text-secondary disabled:opacity-50 resize-none overflow-hidden min-h-[48px] max-h-[200px]"
+                style={{ height: 'auto' }}
               />
               <button
                 type="submit"
                 disabled={!chatMessage.trim() || isSending}
-                className="px-8 py-3 bg-primary text-white rounded-full font-medium hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-8 py-3 bg-primary text-white rounded-full font-medium hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
               >
                 {isSending ? 'Sending...' : 'Send'}
               </button>
             </form>
+            <p className="text-xs text-text-secondary mt-2 text-center">
+              Press Enter to send, Shift+Enter for new line
+            </p>
           </div>
         </div>
       </div>
