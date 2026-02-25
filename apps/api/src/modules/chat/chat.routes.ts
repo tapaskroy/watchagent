@@ -66,6 +66,11 @@ export async function chatRoutes(app: FastifyInstance) {
       schema: {
         description: 'Initialize onboarding conversation with AI-generated questions',
         tags: ['chat'],
+        body: {
+          type: 'object',
+          properties: {},
+          additionalProperties: false,
+        },
         response: {
           200: {
             type: 'object',
