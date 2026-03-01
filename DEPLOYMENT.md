@@ -1,733 +1,265 @@
 # WatchAgent Deployment Guide
 
-Complete guide to deploying WatchAgent to AWS and managing it in production.
-
-## Table of Contents
-
-1. [Prerequisites](#prerequisites)
-2. [Security Setup](#security-setup)
-3. [AWS Infrastructure Setup](#aws-infrastructure-setup)
-4. [Domain Configuration](#domain-configuration)
-5. [First Deployment](#first-deployment)
-6. [GitHub Setup](#github-setup)
-7. [Automated Deployments](#automated-deployments)
-8. [Monitoring and Maintenance](#monitoring-and-maintenance)
-9. [Troubleshooting](#troubleshooting)
+> This guide reflects the actual production setup as of March 2026.
+> The production site is **https://watchagent.tapaskroy.me**
 
 ---
 
-## Prerequisites
+## Production Architecture
 
-### Required Tools
-
-Install these tools on your local machine:
-
-```bash
-# Node.js 20+
-node --version  # Should be 20.x.x
-
-# Docker
-docker --version
-
-# AWS CLI
-aws --version
-
-# Terraform
-terraform --version  # Should be 1.0+
-
-# Git
-git --version
+```
+User Browser
+    │
+    ▼
+Route53: watchagent.tapaskroy.me  ──→  ALB (watchagent-prod-alb)
+Route53: api.watchagent.tapaskroy.me ─→  ALB (watchagent-prod-alb)
+    │
+    ▼
+AWS Application Load Balancer
+  - Port 80:  redirects → HTTPS
+  - Port 443: ACM TLS cert (auto-managed)
+      Host: api.watchagent.tapaskroy.me  → Target Group: watchagent-prod-api-tg  (port 3000)
+      Host: watchagent.tapaskroy.me      → Target Group: watchagent-prod-web-tg  (port 3001)
+    │
+    ▼
+ECS Fargate (cluster: watchagent-prod-cluster)
+  - Service: watchagent-prod-api   → ECR image watchagent-prod-api:latest
+  - Service: watchagent-prod-web   → ECR image watchagent-prod-web:latest
+    │
+    ├── RDS PostgreSQL: watchagent-prod-db.c4tqkfvxhad6.us-east-1.rds.amazonaws.com
+    └── ElastiCache Redis: watchagent-prod-redis.z12smc.0001.use1.cache.amazonaws.com
 ```
 
-### AWS Account Setup
+**Key resource identifiers:**
 
-1. **Create/Login to AWS Account**
-   - Go to https://aws.amazon.com/
-   - Sign in or create a new account
+| Resource | Value |
+|---|---|
+| AWS Account | `269267980934` |
+| Region | `us-east-1` |
+| ECS Cluster | `watchagent-prod-cluster` |
+| ECS Web Service | `watchagent-prod-web` |
+| ECS API Service | `watchagent-prod-api` |
+| ECR Web Repo | `269267980934.dkr.ecr.us-east-1.amazonaws.com/watchagent-prod-web` |
+| ECR API Repo | `269267980934.dkr.ecr.us-east-1.amazonaws.com/watchagent-prod-api` |
+| CodeBuild Project | `watchagent-prod-docker-build` |
+| CodeBuild IAM Role | `watchagent-prod-codebuild-role` |
+| CloudWatch (API logs) | `/ecs/watchagent-prod-api` |
+| CloudWatch (Web logs) | `/ecs/watchagent-prod-web` |
+| CodeBuild logs | `/aws/codebuild/watchagent-prod-docker-build` |
 
-2. **Create IAM User for Deployment**
-   ```bash
-   # Create user via AWS Console:
-   # IAM > Users > Add User
-   # User name: watchagent-deployer
-   # Access type: Programmatic access
-   ```
-
-3. **Attach Required Policies**
-   - AmazonECS_FullAccess
-   - AmazonEC2ContainerRegistryFullAccess
-   - AmazonVPCFullAccess
-   - AmazonRDSFullAccess
-   - ElastiCacheFullAccess
-   - AmazonRoute53FullAccess
-   - AWSCertificateManagerFullAccess
-   - IAMFullAccess (for role creation)
-   - SecretsManagerReadWrite
-
-4. **Configure AWS CLI**
-   ```bash
-   aws configure
-   # AWS Access Key ID: <your-access-key>
-   # AWS Secret Access Key: <your-secret-key>
-   # Default region: us-east-1
-   # Default output format: json
-   ```
-
-### Required API Keys
-
-Obtain these API keys before deployment:
-
-1. **TMDB (The Movie Database)**
-   - Go to https://www.themoviedb.org/settings/api
-   - Create account and request API key
-   - Free tier is sufficient
-
-2. **OMDB (Open Movie Database)**
-   - Go to http://www.omdbapi.com/apikey.aspx
-   - Sign up for free API key
-
-3. **Anthropic Claude**
-   - Go to https://console.anthropic.com/
-   - Create account and get API key
-   - Requires payment method for production use
+> ⚠️ **The EC2 instance `i-0e85530f1d5cbda8c` (52.205.193.184) is a test box tagged
+> `Environment=test`. It is NOT behind the ALB and does NOT serve production traffic.
+> Deploying there has zero effect on https://watchagent.tapaskroy.me.**
 
 ---
 
-## Security Setup
+## Normal Deployment — Push to Main
 
-### 1. Local Environment Variables
-
-**CRITICAL: Never commit API keys to Git!**
+**This is the only step needed for a normal deploy:**
 
 ```bash
-# Set up local .env files
-./scripts/setup-env.sh
-
-# Edit the files and add your API keys
-nano apps/api/.env
-```
-
-Update these values in `apps/api/.env`:
-```env
-TMDB_API_KEY=your_actual_tmdb_key
-OMDB_API_KEY=your_actual_omdb_key
-ANTHROPIC_API_KEY=your_actual_anthropic_key
-JWT_ACCESS_SECRET=<generate with: openssl rand -hex 32>
-JWT_REFRESH_SECRET=<generate with: openssl rand -hex 32>
-```
-
-### 2. Verify .gitignore
-
-```bash
-# Ensure .env files are ignored
-git status
-
-# Should NOT show any .env files
-# If it does, they're in .gitignore
-```
-
-### 3. Test Locally
-
-```bash
-# Start local development environment
-./scripts/local-env.sh start
-
-# Run the application
-npm run dev
-
-# Test the API
-curl http://localhost:3000/health
-```
-
----
-
-## AWS Infrastructure Setup
-
-### Step 1: Prepare Terraform Variables
-
-```bash
-cd terraform
-
-# Copy example tfvars
-cp terraform.tfvars.example terraform.tfvars
-
-# Edit with your values
-nano terraform.tfvars
-```
-
-Update `terraform.tfvars`:
-```hcl
-aws_region  = "us-east-1"
-environment = "prod"
-domain_name = "tapaskroy.me"
-subdomain   = "watchagent"
-```
-
-### Step 2: Set API Keys as Environment Variables
-
-**DO NOT put API keys in terraform.tfvars!**
-
-```bash
-export TF_VAR_tmdb_api_key="your_tmdb_key"
-export TF_VAR_omdb_api_key="your_omdb_key"
-export TF_VAR_anthropic_api_key="your_anthropic_key"
-```
-
-Or create a local file (NOT committed):
-```bash
-# Create terraform/secrets.env (already in .gitignore)
-cat > secrets.env <<EOF
-export TF_VAR_tmdb_api_key="your_tmdb_key"
-export TF_VAR_omdb_api_key="your_omdb_key"
-export TF_VAR_anthropic_api_key="your_anthropic_key"
-EOF
-
-# Load secrets
-source secrets.env
-```
-
-### Step 3: Initialize Terraform
-
-```bash
-terraform init
-```
-
-This will:
-- Download required providers
-- Set up the backend
-- Prepare for deployment
-
-### Step 4: Plan Infrastructure
-
-```bash
-terraform plan
-```
-
-Review the plan carefully. It will create:
-- VPC with public/private/database subnets
-- RDS PostgreSQL database
-- ElastiCache Redis cluster
-- ECS cluster and services
-- Application Load Balancer
-- ECR repositories
-- Route53 records
-- ACM SSL certificate
-- Secrets Manager secrets
-
-### Step 5: Apply Infrastructure
-
-```bash
-terraform apply
-```
-
-Type `yes` when prompted.
-
-**Expected time: 20-30 minutes**
-
-### Step 6: Save Terraform Outputs
-
-```bash
-# Save important outputs
-terraform output > ../infrastructure-outputs.txt
-
-# View specific outputs
-terraform output alb_dns_name
-terraform output ecr_api_repository_url
-terraform output ecr_web_repository_url
-terraform output nameservers
-```
-
----
-
-## Domain Configuration
-
-### Option 1: Domain Registered with Squarespace
-
-If your domain (`tapaskroy.me`) is registered with Squarespace:
-
-1. **Get Route53 Nameservers**
-   ```bash
-   cd terraform
-   terraform output nameservers
-   ```
-
-2. **Update Squarespace DNS**
-   - Log in to Squarespace
-   - Go to Settings > Domains
-   - Click on `tapaskroy.me`
-   - Go to DNS Settings
-   - Under "Name Servers", select "Custom Name Servers"
-   - Enter the 4 nameservers from Terraform output
-   - Save changes
-
-3. **Wait for DNS Propagation**
-   - Can take 24-48 hours
-   - Check status: `dig watchagent.tapaskroy.me`
-
-### Option 2: Domain Already in Route53
-
-If you already have a Route53 hosted zone:
-
-1. **Update Terraform**
-   ```bash
-   # The terraform code will use the existing zone
-   # Verify in terraform/route53.tf
-   ```
-
-2. **DNS records are created automatically**
-
-### Verify SSL Certificate
-
-```bash
-# Check certificate status
-aws acm list-certificates --region us-east-1
-
-# Certificate should be "ISSUED" status
-# If "PENDING_VALIDATION", wait for DNS propagation
-```
-
----
-
-## First Deployment
-
-### Step 1: Build Docker Images
-
-```bash
-# From project root
-./scripts/build-and-push.sh prod
-```
-
-This will:
-- Authenticate with ECR
-- Build API and Web Docker images
-- Push images to ECR with multiple tags
-
-**Expected time: 10-15 minutes**
-
-### Step 2: Deploy to ECS
-
-```bash
-./scripts/deploy-ecs.sh prod
-```
-
-This will:
-- Update ECS services with new images
-- Wait for services to become stable
-- Show deployment status
-
-**Expected time: 5-10 minutes**
-
-### Step 3: Verify Deployment
-
-```bash
-# Check ECS services
-aws ecs describe-services \
-  --cluster watchagent-prod-cluster \
-  --services watchagent-prod-api watchagent-prod-web
-
-# Check running tasks
-aws ecs list-tasks --cluster watchagent-prod-cluster
-
-# View API logs
-aws logs tail /ecs/watchagent-prod-api --follow
-
-# View Web logs
-aws logs tail /ecs/watchagent-prod-web --follow
-```
-
-### Step 4: Test the Application
-
-```bash
-# Test API health
-curl https://api.watchagent.tapaskroy.me/health
-
-# Test Web application
-curl https://watchagent.tapaskroy.me
-
-# Or open in browser
-open https://watchagent.tapaskroy.me
-```
-
----
-
-## GitHub Setup
-
-### Step 1: Create GitHub Repository
-
-```bash
-# Initialize git if not already done
-git init
-git add .
-git commit -m "Initial commit"
-
-# Create repository on GitHub
-# Go to https://github.com/new
-
-# Add remote and push
-git remote add origin https://github.com/YOUR_USERNAME/watchagent.git
-git branch -M main
-git push -u origin main
-```
-
-### Step 2: Add GitHub Secrets
-
-Go to your repository on GitHub:
-1. Click **Settings** > **Secrets and variables** > **Actions**
-2. Click **New repository secret**
-3. Add these secrets:
-
-| Secret Name | Value |
-|-------------|-------|
-| `AWS_ACCESS_KEY_ID` | Your AWS access key |
-| `AWS_SECRET_ACCESS_KEY` | Your AWS secret key |
-| `TMDB_API_KEY` | Your TMDB API key |
-| `OMDB_API_KEY` | Your OMDB API key |
-| `ANTHROPIC_API_KEY` | Your Anthropic API key |
-
-### Step 3: Configure GitHub Environment
-
-1. Go to **Settings** > **Environments**
-2. Click **New environment**
-3. Name it `prod`
-4. Configure protection rules:
-   - ✅ **Required reviewers** (optional, for approval before deploy)
-   - ✅ **Deployment branches**: Only `main` branch
-
-### Step 4: Test GitHub Actions
-
-```bash
-# Make a small change
-echo "# Test" >> README.md
-git add README.md
-git commit -m "Test GitHub Actions"
+git add <files>
+git commit -m "your message"
 git push origin main
+```
 
-# Go to GitHub Actions tab to see deployment
+A GitHub webhook triggers CodeBuild automatically. The `buildspec.yml` at the repo root:
+
+1. Builds `watchagent-prod-api:latest` (linux/amd64 Docker image)
+2. Builds `watchagent-prod-web:latest` with `NEXT_PUBLIC_API_URL=https://api.watchagent.tapaskroy.me/api/v1` baked in at build time
+3. Pushes both images to ECR
+4. Calls `aws ecs update-service --force-new-deployment` for both ECS services
+5. ECS drains old tasks and starts new ones pulling the fresh ECR images (~2–3 min)
+
+**Verify the deploy went through:**
+```bash
+# Check CodeBuild ran for your commit
+aws codebuild list-builds-for-project --project-name watchagent-prod-docker-build --output json \
+  | python3 -c "import json,sys; [print(i) for i in json.load(sys.stdin)['ids'][:3]]"
+
+# Check a specific build status
+aws codebuild batch-get-builds --ids "<build-id>" \
+  --query 'builds[0].[buildStatus,currentPhase,resolvedSourceVersion]' --output table
+
+# Confirm the new version is live
+curl -sk https://watchagent.tapaskroy.me/login | grep -o "version [0-9.]*"
 ```
 
 ---
 
-## Automated Deployments
+## Manual / Recovery Deployment
 
-### Automatic Deployment on Push to Main
+Use this when the webhook didn't fire or you need to force a deploy without a new commit.
 
-Every push to `main` branch automatically:
-1. Builds Docker images
-2. Pushes to ECR
-3. Updates ECS services
-4. Waits for deployment to complete
-
-### Manual Deployment
-
-1. Go to GitHub **Actions** tab
-2. Select "Deploy to AWS" workflow
-3. Click "Run workflow"
-4. Choose environment (prod/staging)
-5. Click "Run workflow"
-
-### Deploying from Local Machine
+### Step 1 — Trigger CodeBuild manually
 
 ```bash
-# Build and push images
-./scripts/build-and-push.sh prod
-
-# Deploy to ECS
-./scripts/deploy-ecs.sh prod
+aws codebuild start-build \
+  --project-name watchagent-prod-docker-build \
+  --source-version main \
+  --query 'build.id' --output text
 ```
 
----
-
-## Monitoring and Maintenance
-
-### View Application Logs
+### Step 2 — Monitor the build (~8–10 min)
 
 ```bash
-# Real-time API logs
-aws logs tail /ecs/watchagent-prod-api --follow
+BUILD_ID="watchagent-prod-docker-build:<id-from-step-1>"
 
-# Real-time Web logs
-aws logs tail /ecs/watchagent-prod-web --follow
-
-# Logs from specific time range
-aws logs filter-log-events \
-  --log-group-name /ecs/watchagent-prod-api \
-  --start-time $(date -u -d '1 hour ago' +%s)000
+# Poll until done
+for i in $(seq 1 25); do
+  sleep 30
+  STATUS=$(aws codebuild batch-get-builds --ids "$BUILD_ID" \
+    --query 'builds[0].buildStatus' --output text)
+  PHASE=$(aws codebuild batch-get-builds --ids "$BUILD_ID" \
+    --query 'builds[0].currentPhase' --output text)
+  echo "$(date -u +%H:%M:%S) - $STATUS | $PHASE"
+  if [ "$STATUS" = "SUCCEEDED" ] || [ "$STATUS" = "FAILED" ]; then break; fi
+done
 ```
 
-### Monitor ECS Services
+### Step 3 — Monitor ECS rollout (~2–3 min after build)
 
 ```bash
-# Service status
 aws ecs describe-services \
   --cluster watchagent-prod-cluster \
-  --services watchagent-prod-api watchagent-prod-web
-
-# Running tasks
-aws ecs list-tasks --cluster watchagent-prod-cluster
-
-# Task details
-aws ecs describe-tasks \
-  --cluster watchagent-prod-cluster \
-  --tasks <task-id>
+  --services watchagent-prod-web watchagent-prod-api \
+  --query 'services[*].[serviceName,runningCount,desiredCount,deployments[0].status]' \
+  --output table
 ```
 
-### CloudWatch Dashboards
+Both services should show `1 | 1 | PRIMARY` when stable.
 
-Access CloudWatch in AWS Console:
-- Metrics: ECS CPU, Memory, Network
-- Alarms: Set up alerts for high CPU/Memory
-- Logs Insights: Query application logs
-
-### Database Monitoring
+### Step 4 — Confirm version is live
 
 ```bash
-# RDS metrics
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/RDS \
-  --metric-name CPUUtilization \
-  --dimensions Name=DBInstanceIdentifier,Value=watchagent-prod-db \
-  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 300 \
-  --statistics Average
-```
-
-### Scaling
-
-Auto-scaling is configured for both API and Web services:
-- Scales up when CPU > 70%
-- Scales down when CPU < 30%
-- Min tasks: 1
-- Max tasks: 4
-
-To adjust:
-```bash
-cd terraform
-# Edit variables.tf for min/max values
-# Apply changes
-terraform apply
-```
-
-### Cost Monitoring
-
-```bash
-# View current month costs
-aws ce get-cost-and-usage \
-  --time-period Start=$(date -u +%Y-%m-01),End=$(date -u +%Y-%m-%d) \
-  --granularity MONTHLY \
-  --metrics BlendedCost
-```
-
-Set up AWS Budget alerts:
-1. Go to AWS Console > Billing > Budgets
-2. Create budget for monthly spending
-3. Set alert threshold (e.g., $100/month)
-
----
-
-## Troubleshooting
-
-### Deployment Fails
-
-1. **Check GitHub Actions logs**
-   - Go to Actions tab
-   - Click on failed workflow
-   - Review error messages
-
-2. **Check ECS service events**
-   ```bash
-   aws ecs describe-services \
-     --cluster watchagent-prod-cluster \
-     --services watchagent-prod-api \
-     | grep -A 20 "events"
-   ```
-
-3. **Check task stopped reason**
-   ```bash
-   aws ecs describe-tasks \
-     --cluster watchagent-prod-cluster \
-     --tasks <task-id>
-   ```
-
-### Application Not Accessible
-
-1. **Check ALB health**
-   ```bash
-   aws elbv2 describe-target-health \
-     --target-group-arn <target-group-arn>
-   ```
-
-2. **Verify DNS**
-   ```bash
-   dig watchagent.tapaskroy.me
-   dig api.watchagent.tapaskroy.me
-   ```
-
-3. **Check SSL certificate**
-   ```bash
-   openssl s_client -connect watchagent.tapaskroy.me:443
-   ```
-
-### Database Connection Issues
-
-1. **Verify security groups**
-   - ECS tasks should have access to RDS security group
-
-2. **Check RDS endpoint**
-   ```bash
-   aws rds describe-db-instances \
-     --db-instance-identifier watchagent-prod-db
-   ```
-
-3. **Test connection from ECS task**
-   ```bash
-   # Use ECS Exec to connect to running task
-   aws ecs execute-command \
-     --cluster watchagent-prod-cluster \
-     --task <task-id> \
-     --container api \
-     --interactive \
-     --command "/bin/sh"
-   ```
-
-### High Costs
-
-1. **Check NAT Gateway usage** (largest cost)
-   - Consider single NAT for non-prod environments
-
-2. **Check ECS task count**
-   - Reduce desired count if not needed
-
-3. **Check RDS instance size**
-   - Use db.t3.micro for development
-
-4. **Enable RDS storage autoscaling**
-   - Prevents over-provisioning
-
-### Secrets Not Loading
-
-1. **Verify Secrets Manager**
-   ```bash
-   aws secretsmanager list-secrets
-   ```
-
-2. **Check IAM permissions**
-   - ECS task execution role needs secretsmanager:GetSecretValue
-
-3. **View task definition**
-   ```bash
-   aws ecs describe-task-definition \
-     --task-definition watchagent-prod-api
-   ```
-
----
-
-## Rollback
-
-### Rollback to Previous Version
-
-```bash
-# List recent images
-aws ecr describe-images \
-  --repository-name watchagent-prod-api \
-  --query 'sort_by(imageDetails,& imagePushedAt)[-5:]'
-
-# Update task definition with specific image tag
-# Then force new deployment
-./scripts/deploy-ecs.sh prod
-```
-
-### Emergency Rollback
-
-```bash
-# Scale down to 0
-aws ecs update-service \
-  --cluster watchagent-prod-cluster \
-  --service watchagent-prod-api \
-  --desired-count 0
-
-# Investigate issue
-
-# Scale back up
-aws ecs update-service \
-  --cluster watchagent-prod-cluster \
-  --service watchagent-prod-api \
-  --desired-count 2
+curl -sk https://watchagent.tapaskroy.me/login | grep -o "version [0-9.]*"
 ```
 
 ---
 
-## Maintenance
+## Checking Production Logs
 
-### Regular Tasks
-
-**Weekly:**
-- Review CloudWatch logs for errors
-- Check application metrics
-- Monitor costs
-
-**Monthly:**
-- Review and rotate secrets
-- Update dependencies
-- Review security patches
-
-**Quarterly:**
-- Review and optimize infrastructure costs
-- Update Terraform modules
-- Security audit
-
-### Updating Infrastructure
+ECS Fargate logs stream to CloudWatch. Use `aws logs tail` for live streaming:
 
 ```bash
-cd terraform
+# Live-tail API logs
+aws logs tail /ecs/watchagent-prod-api --follow
 
-# Make changes to .tf files
-nano vpc.tf
+# Live-tail Web logs
+aws logs tail /ecs/watchagent-prod-web --follow
 
-# Plan changes
-terraform plan
-
-# Apply changes
-terraform apply
+# Last 50 API log lines (snapshot)
+aws logs get-log-events \
+  --log-group-name /ecs/watchagent-prod-api \
+  --log-stream-name $(aws logs describe-log-streams \
+    --log-group-name /ecs/watchagent-prod-api \
+    --order-by LastEventTime --descending \
+    --query 'logStreams[0].logStreamName' --output text) \
+  --limit 50 \
+  --query 'events[*].message' --output text
 ```
 
-### Database Backups
-
-RDS automatically creates:
-- Daily snapshots (retained 7 days)
-- Point-in-time recovery
-
-Manual snapshot:
+For CodeBuild build logs:
 ```bash
-aws rds create-db-snapshot \
-  --db-instance-identifier watchagent-prod-db \
-  --db-snapshot-identifier watchagent-manual-$(date +%Y%m%d)
+aws logs get-log-events \
+  --log-group-name /aws/codebuild/watchagent-prod-docker-build \
+  --log-stream-name "build/<build-id>" \
+  --query 'events[*].message' --output text
 ```
 
 ---
 
-## Complete Teardown
+## Versioning
 
-To completely remove all AWS resources:
+The app version lives in `apps/web/src/lib/version.ts`:
 
-```bash
-cd terraform
-
-# This will DELETE EVERYTHING including database!
-terraform destroy
-
-# Type 'yes' when prompted
+```typescript
+export const APP_VERSION = '0.6';
 ```
 
-**WARNING**: This is irreversible and will delete all data!
+- Bump this **manually** before each release: `0.6 → 0.7 → 0.8`
+- It renders at the bottom of every screen (login page, home page chat bar, all inner pages)
+- After a deploy, check `curl -sk https://watchagent.tapaskroy.me/login | grep "version"` — if the new version number shows, the deploy succeeded
 
 ---
 
-## Support and Resources
+## Known Issues & Fixes
 
-- **AWS Documentation**: https://docs.aws.amazon.com/
-- **Terraform AWS Provider**: https://registry.terraform.io/providers/hashicorp/aws
-- **GitHub Actions**: https://docs.github.com/en/actions
-- **Project Repository**: https://github.com/YOUR_USERNAME/watchagent
+### Webhook not firing / CodeBuild not triggered on push
 
-For issues, create a GitHub issue or contact the maintainers.
+The GitHub webhook is configured on CodeBuild. If it stops working, trigger manually:
+```bash
+aws codebuild start-build --project-name watchagent-prod-docker-build --source-version main
+```
+
+### CodeBuild POST_BUILD fails: `AccessDeniedException` on `ecs:UpdateService`
+
+The CodeBuild IAM role is missing ECS permissions. Fix once:
+```bash
+aws iam put-role-policy \
+  --role-name watchagent-prod-codebuild-role \
+  --policy-name ecs-update-service \
+  --policy-document '{
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Action": ["ecs:UpdateService", "ecs:DescribeServices"],
+      "Resource": "*"
+    }]
+  }'
+```
+
+Then re-trigger the build.
+
+### Code appears on EC2 but not on https://watchagent.tapaskroy.me
+
+You deployed to the wrong place. The EC2 instance (`i-0e85530f1d5cbda8c`) is a test box only.
+The production traffic goes through the ALB → ECS Fargate pipeline. Use the CodeBuild flow above.
+
+### ECS task keeps restarting / unhealthy
+
+Check the latest stopped task reason:
+```bash
+# Get recent stopped tasks
+aws ecs list-tasks --cluster watchagent-prod-cluster --desired-status STOPPED \
+  --query 'taskArns[0]' --output text
+
+# Check why it stopped
+aws ecs describe-tasks --cluster watchagent-prod-cluster --tasks <task-arn> \
+  --query 'tasks[0].containers[0].reason' --output text
+
+# Then check CloudWatch logs for the error
+aws logs tail /ecs/watchagent-prod-api --follow
+```
+
+### Environment variables / secrets not loading
+
+Production secrets are stored in AWS Secrets Manager and injected at ECS task launch:
+- `DB_PASSWORD`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`
+- `TMDB_API_KEY`, `OMDB_API_KEY`, `ANTHROPIC_API_KEY`
+
+The `NEXT_PUBLIC_API_URL` is baked into the web image at build time via `buildspec.yml` `--build-arg`.
+
+---
+
+## Emergency Rollback
+
+If a bad deploy causes the site to go down, force a redeployment from the previous image digest:
+
+```bash
+# 1. List recent ECR images to find the previous good one
+aws ecr describe-images --repository-name watchagent-prod-web \
+  --query 'sort_by(imageDetails, &imagePushedAt)[-5:].[imagePushedAt,imageDigest]' \
+  --output table
+
+# 2. Scale the broken service to 0 immediately
+aws ecs update-service --cluster watchagent-prod-cluster \
+  --service watchagent-prod-web --desired-count 0
+
+# 3. Update task definition to use previous image digest, then redeploy
+# (or revert the git commit, trigger a new CodeBuild build)
+
+# 4. Scale back up
+aws ecs update-service --cluster watchagent-prod-cluster \
+  --service watchagent-prod-web --desired-count 1
+```
