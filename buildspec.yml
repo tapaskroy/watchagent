@@ -28,3 +28,7 @@ phases:
       - echo Pushing Web image...
       - docker push $REPOSITORY_WEB_URI:$IMAGE_TAG
       - echo Images pushed successfully
+      - echo Forcing ECS redeployment...
+      - aws ecs update-service --cluster watchagent-prod-cluster --service watchagent-prod-api --force-new-deployment
+      - aws ecs update-service --cluster watchagent-prod-cluster --service watchagent-prod-web --force-new-deployment
+      - echo ECS redeployment triggered
