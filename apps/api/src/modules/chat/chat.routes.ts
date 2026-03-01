@@ -1,6 +1,9 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { ChatService } from '../../services/chat/chat.service';
 import { chatSessionService } from '../../services/chat/chat-session.service';
+import { db } from '@watchagent/database';
+import { conversations } from '@watchagent/database';
+import { eq } from 'drizzle-orm';
 import type { InteractiveChatRequest } from '@watchagent/shared';
 
 const chatService = new ChatService();
@@ -96,6 +99,15 @@ export async function chatRoutes(app: FastifyInstance) {
       // Only generate questions if this is a new onboarding conversation
       if (conversation.isOnboarding && (conversation.messages as any[]).length === 0) {
         const questions = await chatService.generateOnboardingQuestions(userId);
+
+        // Save questions as the first assistant message so they persist across page refreshes
+        await db
+          .update(conversations)
+          .set({
+            messages: [{ role: 'assistant', content: questions, timestamp: new Date().toISOString() }],
+            updatedAt: new Date(),
+          })
+          .where(eq(conversations.id, conversation.id));
 
         return reply.send({
           success: true,

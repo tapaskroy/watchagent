@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { authApi } from '@watchagent/api-client';
 import { useAuthStore } from '@/store/auth';
 import { useRouter } from 'next/navigation';
@@ -9,6 +9,7 @@ import type {
 
 export function useAuth() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user, isAuthenticated, setUser, logout: logoutStore } = useAuthStore();
 
   // Note: API doesn't return user object, we'll decode from JWT
@@ -118,6 +119,8 @@ export function useAuth() {
   };
 
   const logout = async () => {
+    queryClient.clear();
+    sessionStorage.removeItem('watchagent_search_results');
     await logoutStore();
     router.push('/login');
   };

@@ -22,7 +22,6 @@ export function useRecommendations(params?: GetRecommendationsRequest & { enable
     enabled: enabled !== false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchOnMount: false,
   });
 }
 

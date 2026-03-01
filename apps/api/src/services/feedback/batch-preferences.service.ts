@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { db } from '@watchagent/database';
 import { userPreferences } from '@watchagent/database';
+import { CLAUDE_MODEL } from '@watchagent/shared';
 import { eq } from 'drizzle-orm';
 import type { FeedbackAction } from './session-tracker.service';
 
@@ -48,7 +49,7 @@ Important:
 Return ONLY the updated viewing preferences text, nothing else.`;
 
       console.log('\n========== BATCH PREFERENCES UPDATE - PROMPT TO HAIKU ==========');
-      console.log('Model: claude-haiku-4-20250514');
+      console.log('Model:', CLAUDE_MODEL);
       console.log('Max Tokens: 500');
       console.log('Temperature: 0.7');
       console.log(`Actions Count: ${actions.length}`);
@@ -57,7 +58,7 @@ Return ONLY the updated viewing preferences text, nothing else.`;
       console.log('================================================================\n');
 
       const message = await anthropic.messages.create({
-        model: 'claude-haiku-4-20250514',
+        model: CLAUDE_MODEL,
         max_tokens: 500,
         temperature: 0.7,
         messages: [

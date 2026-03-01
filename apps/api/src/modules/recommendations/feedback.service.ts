@@ -2,6 +2,7 @@ import { db } from '@watchagent/database';
 import { conversations, ratings, watchlistItems, content, userPreferences } from '@watchagent/database';
 import { eq, and } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
+import { CLAUDE_MODEL } from '@watchagent/shared';
 import { sessionTracker } from '../../services/feedback/session-tracker.service';
 import { batchPreferencesService } from '../../services/feedback/batch-preferences.service';
 
@@ -282,8 +283,8 @@ Rules:
 
 Return ONLY the updated learned insights text, nothing else.`;
 
-      console.log('\n========== LEARNED INSIGHTS UPDATE - PROMPT TO SONNET ==========');
-      console.log('Model: claude-sonnet-4-20250514');
+      console.log('\n========== LEARNED INSIGHTS UPDATE - PROMPT TO HAIKU ==========');
+      console.log('Model:', CLAUDE_MODEL);
       console.log('Max Tokens: 400');
       console.log('Temperature: 0.7');
       console.log('\nPROMPT:');
@@ -291,7 +292,7 @@ Return ONLY the updated learned insights text, nothing else.`;
       console.log('================================================================\n');
 
       const message = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: CLAUDE_MODEL,
         max_tokens: 400,
         temperature: 0.7,
         messages: [
@@ -304,7 +305,7 @@ Return ONLY the updated learned insights text, nothing else.`;
 
       const updatedInsights = message.content[0].type === 'text' ? message.content[0].text : '';
 
-      console.log('\n========== LEARNED INSIGHTS UPDATE - RESPONSE FROM SONNET ==========');
+      console.log('\n========== LEARNED INSIGHTS UPDATE - RESPONSE FROM HAIKU ==========');
       console.log('Stop Reason:', message.stop_reason);
       console.log('Usage:', JSON.stringify(message.usage, null, 2));
       console.log('\nRESPONSE:');

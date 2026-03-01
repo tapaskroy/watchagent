@@ -47,7 +47,8 @@ export const chatApi = {
 
   async initOnboarding(): Promise<InitOnboardingResponse> {
     const response = await apiClient.post<ApiResponse<InitOnboardingResponse>>(
-      API_ENDPOINTS.chat.initOnboarding
+      API_ENDPOINTS.chat.initOnboarding,
+      {}
     );
 
     if (response.data.success && response.data.data) {
