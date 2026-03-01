@@ -187,7 +187,7 @@ export const ContentCardWithFeedback: React.FC<ContentCardFeedbackProps> = ({
   );
 
   return (
-    <div className="group cursor-pointer transition-transform hover:scale-105 relative">
+    <div className="group cursor-pointer transition-transform hover:scale-105 hover:z-10 relative">
       <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-background-card">
         {/* Feedback action buttons - appear on hover */}
         <div className="absolute top-2 left-2 right-2 flex justify-between items-start z-10 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -250,7 +250,7 @@ export const ContentCardWithFeedback: React.FC<ContentCardFeedbackProps> = ({
               </div>
             )}
             {recommendationReason && (
-              <p className="text-xs text-gray-300 line-clamp-2">
+              <p className="text-xs text-gray-300 line-clamp-1">
                 {recommendationReason}
               </p>
             )}
@@ -262,7 +262,7 @@ export const ContentCardWithFeedback: React.FC<ContentCardFeedbackProps> = ({
         {showModal === 'keep' && renderKeepModal()}
       </div>
 
-      <div className="mt-2">
+      <div className="mt-2 relative">
         <h3 className="text-sm font-medium text-text-primary line-clamp-1 group-hover:text-primary transition-colors">
           {content.title}
         </h3>
@@ -277,6 +277,11 @@ export const ContentCardWithFeedback: React.FC<ContentCardFeedbackProps> = ({
             </>
           )}
         </div>
+        {recommendationReason && (
+          <div className="absolute left-0 right-0 top-full mt-1 bg-gray-900 border border-gray-700 rounded-md p-3 z-50 opacity-0 group-hover:opacity-100 transition-opacity shadow-xl pointer-events-none">
+            <p className="text-xs text-gray-200 leading-relaxed">{recommendationReason}</p>
+          </div>
+        )}
       </div>
     </div>
   );
