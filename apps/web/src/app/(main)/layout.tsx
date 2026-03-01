@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { Button, Container } from '@watchagent/ui';
+import { APP_VERSION } from '@/lib/version';
 
 export default function MainLayout({
   children,
@@ -80,6 +81,7 @@ export default function MainLayout({
         <Container>
           <div className="text-center text-text-secondary text-sm">
             <p>&copy; 2026 WatchAgent. Your personalized entertainment companion.</p>
+            <p className="text-xs text-gray-600 mt-1">Copyright Tapas Roy, version {APP_VERSION}</p>
           </div>
         </Container>
       </footer>

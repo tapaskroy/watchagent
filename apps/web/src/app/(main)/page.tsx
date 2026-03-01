@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { ContentCard, ContentCardWithFeedback, Loading } from '@watchagent/ui';
+import { APP_VERSION } from '@/lib/version';
 import { useRecommendations, useRefreshRecommendations } from '@/hooks/useRecommendations';
 import { useChat } from '@/hooks/useChat';
 import { useRouter } from 'next/navigation';
@@ -431,6 +432,7 @@ export default function HomePage() {
             <p className="text-xs text-text-secondary mt-2 text-center">
               Press Enter to send, Shift+Enter for new line
             </p>
+            <p className="text-xs text-gray-600 mt-1 text-center">Copyright Tapas Roy, version {APP_VERSION}</p>
           </div>
         </div>
       </div>
