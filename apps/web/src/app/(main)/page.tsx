@@ -61,7 +61,7 @@ export default function HomePage() {
 
     const timer = setTimeout(() => poll(), 3000);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [isGeneratingRecs, isOnboarded, recommendations]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isGeneratingRecs, isOnboarded, recommendations]); // eslint-disable-line
 
   const handleContentSelect = (content: ContentCardType) => {
     router.push(`/content/${content.tmdbId}?type=${content.type}`);

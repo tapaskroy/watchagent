@@ -83,7 +83,7 @@ export default function ChatPage() {
     }
 
     // Post-onboarding: build thread from DB messages
-    let textThread: ThreadMessage[] = (
+    const textThread: ThreadMessage[] = (
       conversation.messages as { role: string; content: string }[]
     ).map((m) => ({
       role: m.role as 'user' | 'assistant',
@@ -114,7 +114,7 @@ export default function ChatPage() {
     }
 
     setThread(textThread);
-  }, [conversation]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conversation]); // eslint-disable-line
 
   // ── Auto-scroll thread to bottom ─────────────────────────────────────────
   useEffect(() => {
