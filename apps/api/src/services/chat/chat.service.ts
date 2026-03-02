@@ -21,6 +21,7 @@ interface ConversationContext {
   favoriteActors?: string[];
   dislikes?: string[];
   moodPreferences?: string[];
+  summary?: string; // Rolling summary of older conversation turns (sliding window)
 }
 
 interface SearchQuery {
@@ -186,23 +187,27 @@ Keep the tone friendly and conversational. Ask open-ended questions that encoura
         throw new Error('Conversation not found');
       }
 
+      // Hoist message array read so it's available for both search detection and regular flow
+      const conversationMessages = conversation.messages as ChatMessage[];
+
       // Detect if this is a search query (only for post-onboarding conversations)
       if (!conversation.isOnboarding || conversation.onboardingCompleted) {
-        const searchQuery = await this.detectSearchQuery(userMessage, conversation.context);
+        const searchQuery = await this.detectSearchQuery(
+          userMessage,
+          conversation.context,
+          conversationMessages
+        );
 
         if (searchQuery.isSearch) {
           logInfo('Detected search query', { userId, searchQuery });
           const searchResults = await this.performSearch(searchQuery, userMessage, conversation.context);
+          const searchResponseMessage = this.formatSearchResponse(searchQuery, searchResults.length);
 
-          // Update conversation with user message
-          const conversationMessages = conversation.messages as ChatMessage[];
+          // Save both user message AND assistant search response to keep history complete
           const updatedMessages: ChatMessage[] = [
             ...conversationMessages,
-            {
-              role: 'user',
-              content: userMessage,
-              timestamp: new Date().toISOString(),
-            },
+            { role: 'user', content: userMessage, timestamp: new Date().toISOString() },
+            { role: 'assistant', content: searchResponseMessage, timestamp: new Date().toISOString() },
           ];
 
           await db
@@ -214,7 +219,7 @@ Keep the tone friendly and conversational. Ask open-ended questions that encoura
             .where(eq(conversations.id, conversationId));
 
           return {
-            message: this.formatSearchResponse(searchQuery, searchResults.length),
+            message: searchResponseMessage,
             searchResults: searchResults,
             isSearch: true,
           };
@@ -239,13 +244,13 @@ Keep the tone friendly and conversational. Ask open-ended questions that encoura
       // Build context for LLM
       const contextStr = this.buildContextString(userRatings, userWatchlist, conversation.context);
 
+      const conversationSummary = (conversation.context as ConversationContext)?.summary;
       const systemPrompt = conversation.isOnboarding
         ? this.getOnboardingSystemPrompt(contextStr)
-        : this.getRegularChatSystemPrompt(contextStr);
+        : this.getRegularChatSystemPrompt(contextStr, conversationSummary);
 
       // Build message history for Claude
       const messages: Anthropic.MessageParam[] = [];
-      const conversationMessages = conversation.messages as ChatMessage[];
 
       // Add previous messages
       conversationMessages.forEach((msg) => {
@@ -303,11 +308,24 @@ Keep the tone friendly and conversational. Ask open-ended questions that encoura
       const userMessageCount = updatedMessages.filter((m) => m.role === 'user').length;
       const shouldCompleteOnboarding = conversation.isOnboarding && userMessageCount >= 3;
 
+      // Apply sliding window for post-onboarding conversations to cap token usage
+      let messagesToSave = updatedMessages;
+      let contextToSave = updatedContext;
+      if (!conversation.isOnboarding && conversation.onboardingCompleted) {
+        const { trimmedMessages, updatedContext: windowedContext } = await this.applyMessageWindow(
+          conversationId,
+          updatedMessages,
+          updatedContext as ConversationContext
+        );
+        messagesToSave = trimmedMessages;
+        contextToSave = windowedContext;
+      }
+
       await db
         .update(conversations)
         .set({
-          messages: updatedMessages,
-          context: updatedContext,
+          messages: messagesToSave,
+          context: contextToSave,
           onboardingCompleted: shouldCompleteOnboarding ? true : conversation.onboardingCompleted,
           updatedAt: new Date(),
         })
@@ -423,19 +441,24 @@ Keep responses concise (2-3 sentences) and natural.`;
   /**
    * System prompt for regular chat
    */
-  private getRegularChatSystemPrompt(context: string): string {
-    return `You are a friendly AI assistant for WatchAgent, a personalized movie and TV show recommendation platform.
+  private getRegularChatSystemPrompt(context: string, conversationSummary?: string): string {
+    const summarySection = conversationSummary
+      ? `\nEarlier conversation summary:\n${conversationSummary}\n`
+      : '';
 
-Help users discover movies and TV shows based on their mood, preferences, and viewing history.
+    return `You are WatchAgent, a knowledgeable and friendly AI companion for discovering movies and TV shows. You have an ongoing relationship with this user and remember everything they've told you.
+${summarySection}
+Current user profile:
+${context}
 
-Guidelines:
-- Provide specific movie/TV recommendations when asked
-- Ask clarifying questions about their mood or preferences
-- Reference their viewing history when relevant
-- Keep responses concise and conversational
-
-User Context:
-${context}`;
+How to behave:
+- ALWAYS use the conversation history above to stay in context. If the user mentioned a film, actor, or genre earlier, reference it naturally.
+- When the user uses vague references ("something like that", "more of those", "the director we talked about"), resolve them from the recent messages.
+- Ask ONE focused follow-up question when a request is ambiguous — never pepper them with multiple questions.
+- When suggesting titles, briefly explain why each one fits what they've described, connecting it to things they've said.
+- Keep replies concise: 2-4 sentences for conversational turns. Be warm but not verbose.
+- Never repeat back what the user just said. Always move the conversation forward.
+- If the user is clearly asking to find/watch something specific, end your reply with a short action phrase like "Let me pull those up for you!" so the search can trigger.`;
   }
 
   /**
@@ -492,8 +515,9 @@ Respond ONLY with a JSON object in this format:
           return Array.from(new Set([...existing, ...newItems]));
         };
 
-        // Merge with existing context and remove duplicates
+        // Merge with existing context — spread first to preserve extra keys like summary
         return {
+          ...currentContext,
           favoriteMovies: mergeUnique(currentContext.favoriteMovies, extracted.favoriteMovies),
           favoriteGenres: mergeUnique(currentContext.favoriteGenres, extracted.favoriteGenres),
           favoriteActors: mergeUnique(currentContext.favoriteActors, extracted.favoriteActors),
@@ -510,21 +534,38 @@ Respond ONLY with a JSON object in this format:
   }
 
   /**
-   * Detect if user message is a content search query
+   * Detect if user message is a content search query.
+   * recentMessages: last N messages for resolving vague references like "more of those".
    */
-  private async detectSearchQuery(userMessage: string, _context: any): Promise<SearchQuery> {
+  private async detectSearchQuery(
+    userMessage: string,
+    _context: any,
+    recentMessages: ChatMessage[] = []
+  ): Promise<SearchQuery> {
     try {
+      // Build a short conversation snippet so Claude can resolve references
+      const historySnippet = recentMessages.length > 0
+        ? recentMessages
+            .slice(-6)
+            .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content.slice(0, 300)}`)
+            .join('\n')
+        : '';
+
+      const contextBlock = historySnippet
+        ? `\nRecent conversation (use this to resolve references like "those", "something like that", "more of those"):\n${historySnippet}\n`
+        : '';
+
       const detectionPrompt = `Analyze this user message and determine if they are asking for specific content recommendations/search vs. just having a conversation.
+${contextBlock}
+Current message: "${userMessage}"
 
-User message: "${userMessage}"
-
-If this is a SEARCH REQUEST (e.g., "show me funny movies", "I want to watch a thriller", "find me French films"), extract:
+If this is a SEARCH REQUEST (e.g., "show me funny movies", "I want to watch a thriller", "find me French films", or follow-ups like "show me more like those"), extract:
 - genres (array of genre names like "comedy", "thriller", "drama", "action", "romance", "horror", "sci-fi", "documentary")
 - type ("movie", "tv", or "both")
 - mood (if mentioned, like "funny", "scary", "uplifting", "dark")
 - language (if mentioned, like "French", "Spanish", "Korean")
 - yearFrom/yearTo (if they mention a decade or year range)
-- keywords (other descriptive terms)
+- keywords (other descriptive terms, resolved from context if needed)
 
 If this is just CONVERSATION (asking how I am, thanking, general chat, telling me about themselves without asking for recommendations), return isSearch: false.
 
@@ -765,6 +806,69 @@ Return exactly 10 titles.`;
     } catch (error) {
       logError(error as Error, { service: 'performSearch' });
       return [];
+    }
+  }
+
+  /**
+   * Sliding window: keep last 15 messages verbatim, summarize older ones.
+   * Stores the summary in context.summary so it can be injected into the system prompt.
+   * Only called for post-onboarding conversations.
+   */
+  private async applyMessageWindow(
+    conversationId: string,
+    allMessages: ChatMessage[],
+    currentContext: ConversationContext
+  ): Promise<{ trimmedMessages: ChatMessage[]; updatedContext: ConversationContext }> {
+    const WINDOW_SIZE = 15;
+
+    if (allMessages.length <= WINDOW_SIZE) {
+      return { trimmedMessages: allMessages, updatedContext: currentContext };
+    }
+
+    const olderMessages = allMessages.slice(0, allMessages.length - WINDOW_SIZE);
+    const recentMessages = allMessages.slice(allMessages.length - WINDOW_SIZE);
+
+    // Re-summarize every 5 overflow messages to avoid summarizing on every single turn
+    const shouldResummarize = !currentContext.summary || olderMessages.length % 5 === 0;
+
+    if (!shouldResummarize) {
+      return { trimmedMessages: recentMessages, updatedContext: currentContext };
+    }
+
+    try {
+      const previousSummarySection = currentContext.summary
+        ? `Previous summary:\n${currentContext.summary}\n\n`
+        : '';
+
+      const olderText = olderMessages
+        .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+        .join('\n');
+
+      const summaryResponse = await this.anthropic.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 400,
+        messages: [{
+          role: 'user',
+          content: `${previousSummarySection}Summarize this movie/TV discussion concisely (3-5 sentences). Focus on: titles mentioned, genres discussed, moods expressed, and any preferences revealed. This will be used as context for continuing the conversation.\n\nConversation:\n${olderText}`,
+        }],
+      });
+
+      const summaryContent = summaryResponse.content[0];
+      const newSummary = summaryContent.type === 'text' ? summaryContent.text : (currentContext.summary ?? '');
+
+      logInfo('Generated conversation window summary', {
+        conversationId,
+        olderMessageCount: olderMessages.length,
+        summaryLength: newSummary.length,
+      });
+
+      return {
+        trimmedMessages: recentMessages,
+        updatedContext: { ...currentContext, summary: newSummary },
+      };
+    } catch (error) {
+      logError(error as Error, { service: 'ChatService.applyMessageWindow' });
+      return { trimmedMessages: recentMessages, updatedContext: currentContext };
     }
   }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Button, Container } from '@watchagent/ui';
 import { APP_VERSION } from '@/lib/version';
@@ -10,9 +11,8 @@ export default function MainLayout({
 }: {
   children: React.ReactNode;
 }) {
-  console.log('[MainLayout] Rendering');
   const { user, logout } = useAuth();
-  console.log('[MainLayout] User:', user?.username || 'null');
+  const pathname = usePathname();
 
   return (
     <div className="min-h-screen bg-background-dark">
@@ -29,19 +29,25 @@ export default function MainLayout({
               <nav className="hidden md:flex items-center gap-6">
                 <Link
                   href="/"
-                  className="text-text-secondary hover:text-text-primary transition-colors"
+                  className={`transition-colors ${pathname === '/' ? 'text-text-primary font-medium' : 'text-text-secondary hover:text-text-primary'}`}
                 >
                   Home
                 </Link>
                 <Link
+                  href="/chat"
+                  className={`transition-colors ${pathname === '/chat' ? 'text-text-primary font-medium' : 'text-text-secondary hover:text-text-primary'}`}
+                >
+                  Chat
+                </Link>
+                <Link
                   href="/browse"
-                  className="text-text-secondary hover:text-text-primary transition-colors"
+                  className={`transition-colors ${pathname === '/browse' ? 'text-text-primary font-medium' : 'text-text-secondary hover:text-text-primary'}`}
                 >
                   Browse
                 </Link>
                 <Link
                   href="/watchlist"
-                  className="text-text-secondary hover:text-text-primary transition-colors"
+                  className={`transition-colors ${pathname.startsWith('/watchlist') ? 'text-text-primary font-medium' : 'text-text-secondary hover:text-text-primary'}`}
                 >
                   My Watchlist
                 </Link>
