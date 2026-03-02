@@ -130,21 +130,13 @@ export default function HomePage() {
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-display font-bold text-text-primary">Today's Picks</h2>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => refreshRecommendations()}
-            disabled={isRefreshing}
-            className="text-sm text-primary hover:text-red-400 transition-colors disabled:opacity-50"
-          >
-            {isRefreshing ? 'Refreshing...' : '↺ Refresh'}
-          </button>
-          <button
-            onClick={() => router.push('/recommendations')}
-            className="text-sm text-text-secondary hover:text-text-primary transition-colors"
-          >
-            See all →
-          </button>
-        </div>
+        <button
+          onClick={() => refreshRecommendations()}
+          disabled={isRefreshing}
+          className="text-sm text-primary hover:text-red-400 transition-colors disabled:opacity-50"
+        >
+          {isRefreshing ? 'Refreshing...' : '↺ Refresh'}
+        </button>
       </div>
 
       {isLoadingRecs ? (

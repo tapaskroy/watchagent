@@ -87,7 +87,7 @@ export default function MainLayout({
         <Container>
           <div className="text-center text-text-secondary text-sm">
             <p>&copy; 2026 WatchAgent. Your personalized entertainment companion.</p>
-            <p className="text-xs text-gray-600 mt-1">Copyright Tapas Roy, version {APP_VERSION}</p>
+            <p className="text-xs text-gray-600 mt-1">version {APP_VERSION}</p>
           </div>
         </Container>
       </footer>

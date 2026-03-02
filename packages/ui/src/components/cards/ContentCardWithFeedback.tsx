@@ -57,9 +57,9 @@ export const ContentCardWithFeedback: React.FC<ContentCardFeedbackProps> = ({
   };
 
   const renderStarRating = () => (
-    <div className="mt-4 pt-4 border-t border-gray-700">
-      <p className="text-sm text-text-secondary mb-3">Rate this content (1-5 stars)</p>
-      <div className="flex gap-2 justify-center">
+    <div className="mt-2 pt-2 border-t border-gray-700">
+      <p className="text-xs text-text-secondary mb-1">Rate it (1-5 stars)</p>
+      <div className="flex gap-1 justify-center">
         {[1, 2, 3, 4, 5].map((star) => (
           <button
             key={star}
@@ -70,7 +70,7 @@ export const ContentCardWithFeedback: React.FC<ContentCardFeedbackProps> = ({
             className="transition-transform hover:scale-110"
           >
             <svg
-              className={`w-8 h-8 ${
+              className={`w-5 h-5 ${
                 star <= (hoveredRating || selectedRating)
                   ? 'fill-yellow-400 text-yellow-400'
                   : 'fill-gray-600 text-gray-600'
@@ -83,24 +83,24 @@ export const ContentCardWithFeedback: React.FC<ContentCardFeedbackProps> = ({
         ))}
       </div>
       {selectedRating > 0 && (
-        <p className="text-center text-sm text-primary mt-2 font-medium">
+        <p className="text-center text-xs text-primary mt-1 font-medium">
           {selectedRating}/5
         </p>
       )}
-      <div className="flex gap-2 mt-4">
+      <div className="flex gap-1 mt-2">
         <button
           onClick={() => {
             setShowRatingInput(false);
             setSelectedRating(0);
           }}
-          className="flex-1 px-3 py-2 bg-gray-700 text-white text-sm rounded-md hover:bg-gray-600 transition-colors"
+          className="flex-1 px-2 py-1 bg-gray-700 text-white text-xs rounded-md hover:bg-gray-600 transition-colors"
         >
           Cancel
         </button>
         <button
           onClick={handleRatingSubmit}
           disabled={selectedRating === 0}
-          className="flex-1 px-3 py-2 bg-primary text-white text-sm rounded-md hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 px-2 py-1 bg-primary text-white text-xs rounded-md hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Submit
         </button>
@@ -109,9 +109,9 @@ export const ContentCardWithFeedback: React.FC<ContentCardFeedbackProps> = ({
   );
 
   const renderRemoveModal = () => (
-    <div className="absolute top-0 left-0 right-0 bottom-0 bg-background-dark/95 backdrop-blur-sm rounded-lg p-4 z-20 flex flex-col">
-      <div className="flex justify-between items-start mb-4">
-        <h4 className="text-sm font-semibold text-text-primary">Remove from recommendations</h4>
+    <div className="absolute top-0 left-0 right-0 bottom-0 bg-background-dark/95 backdrop-blur-sm rounded-lg p-2 z-20 flex flex-col">
+      <div className="flex justify-between items-start mb-2">
+        <h4 className="text-xs font-semibold text-text-primary">Remove from recs</h4>
         <button
           onClick={() => {
             setShowModal(null);
@@ -120,27 +120,27 @@ export const ContentCardWithFeedback: React.FC<ContentCardFeedbackProps> = ({
           }}
           className="text-text-secondary hover:text-text-primary"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>
 
       {!showRatingInput ? (
-        <div className="space-y-2 flex-1">
+        <div className="space-y-1 flex-1">
           <button
             onClick={() => handleRemove('not_relevant')}
-            className="w-full px-4 py-3 bg-gray-800 hover:bg-gray-700 text-text-primary text-sm rounded-md transition-colors text-left"
+            className="w-full px-2 py-1.5 bg-gray-800 hover:bg-gray-700 text-text-primary text-xs rounded-md transition-colors text-left"
           >
             <div className="font-medium">Not Relevant</div>
-            <div className="text-xs text-text-secondary mt-1">Not interested in this type of content</div>
+            <div className="text-xs text-text-secondary">Not my type</div>
           </button>
           <button
             onClick={() => handleRemove('watched')}
-            className="w-full px-4 py-3 bg-gray-800 hover:bg-gray-700 text-text-primary text-sm rounded-md transition-colors text-left"
+            className="w-full px-2 py-1.5 bg-gray-800 hover:bg-gray-700 text-text-primary text-xs rounded-md transition-colors text-left"
           >
-            <div className="font-medium">Already Watched It</div>
-            <div className="text-xs text-text-secondary mt-1">I've seen this already</div>
+            <div className="font-medium">Already Watched</div>
+            <div className="text-xs text-text-secondary">I've seen this</div>
           </button>
         </div>
       ) : (
@@ -152,35 +152,35 @@ export const ContentCardWithFeedback: React.FC<ContentCardFeedbackProps> = ({
   );
 
   const renderKeepModal = () => (
-    <div className="absolute top-0 left-0 right-0 bottom-0 bg-background-dark/95 backdrop-blur-sm rounded-lg p-4 z-20 flex flex-col">
-      <div className="flex justify-between items-start mb-4">
-        <h4 className="text-sm font-semibold text-text-primary">What would you like to do?</h4>
+    <div className="absolute top-0 left-0 right-0 bottom-0 bg-background-dark/95 backdrop-blur-sm rounded-lg p-2 z-20 flex flex-col">
+      <div className="flex justify-between items-start mb-2">
+        <h4 className="text-xs font-semibold text-text-primary">What to do?</h4>
         <button
           onClick={() => {
             setShowModal(null);
           }}
           className="text-text-secondary hover:text-text-primary"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>
 
-      <div className="space-y-2 flex-1">
+      <div className="space-y-1 flex-1">
         <button
           onClick={() => handleKeep('keep')}
-          className="w-full px-4 py-3 bg-green-900/30 hover:bg-green-900/50 text-text-primary text-sm rounded-md transition-colors text-left border border-green-700"
+          className="w-full px-2 py-1.5 bg-green-900/30 hover:bg-green-900/50 text-text-primary text-xs rounded-md transition-colors text-left border border-green-700"
         >
-          <div className="font-medium">Keep in Recommendations</div>
-          <div className="text-xs text-text-secondary mt-1">This looks interesting</div>
+          <div className="font-medium">Keep in Recs</div>
+          <div className="text-xs text-text-secondary">Looks interesting</div>
         </button>
         <button
           onClick={() => handleKeep('watchlist')}
-          className="w-full px-4 py-3 bg-primary/20 hover:bg-primary/30 text-text-primary text-sm rounded-md transition-colors text-left border border-primary"
+          className="w-full px-2 py-1.5 bg-primary/20 hover:bg-primary/30 text-text-primary text-xs rounded-md transition-colors text-left border border-primary"
         >
           <div className="font-medium">Add to Watchlist</div>
-          <div className="text-xs text-text-secondary mt-1">I want to watch this soon</div>
+          <div className="text-xs text-text-secondary">Watch this soon</div>
         </button>
       </div>
     </div>
