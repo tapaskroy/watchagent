@@ -2,12 +2,13 @@ import SwiftUI
 
 struct ChatBarView: View {
     @Binding var text: String
+    var placeholder: String = "Ask about movies or TV shows..."
     let isLoading: Bool
     let onSend: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            TextField("Ask about movies or TV shows...", text: $text, axis: .vertical)
+            TextField(placeholder, text: $text, axis: .vertical)
                 .textFieldStyle(.plain)
                 .lineLimit(1...4)
                 .padding(.horizontal, 14)

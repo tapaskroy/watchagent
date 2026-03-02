@@ -2,32 +2,21 @@ import SwiftUI
 
 struct HomeView: View {
     @State private var viewModel = HomeViewModel()
+    var onGoToChat: (() -> Void)?
 
     var body: some View {
         NavigationStack {
             Group {
                 if viewModel.isLoading {
                     LoadingView(message: "Setting things up...")
-                } else if viewModel.isOnboarding && !viewModel.onboardingCompleted {
-                    OnboardingChatView(viewModel: viewModel)
+                } else if !viewModel.onboardingCompleted {
+                    onboardingPrompt
                 } else {
-                    VStack(spacing: 0) {
-                        RecommendationGridView(
-                            recommendations: viewModel.recommendations,
-                            searchResults: viewModel.searchResults,
-                            isRefreshing: viewModel.isRefreshingRecommendations,
-                            onRefresh: { await viewModel.refreshRecommendations() },
-                            onClearSearch: { viewModel.clearSearchResults() }
-                        )
-
-                        ChatBarView(
-                            text: $viewModel.chatInput,
-                            isLoading: viewModel.isSendingMessage
-                        ) {
-                            let text = viewModel.chatInput
-                            Task { await viewModel.sendMessage(text) }
-                        }
-                    }
+                    RecommendationGridView(
+                        recommendations: viewModel.recommendations,
+                        isRefreshing: viewModel.isRefreshingRecommendations,
+                        onRefresh: { await viewModel.refreshRecommendations() }
+                    )
                 }
             }
             .navigationTitle("WatchAgent")
@@ -39,6 +28,35 @@ struct HomeView: View {
         }
         .task {
             await viewModel.loadInitialData()
+        }
+    }
+
+    private var onboardingPrompt: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            Image(systemName: "sparkles")
+                .font(.system(size: 56))
+                .foregroundStyle(Theme.primary)
+            Text("Welcome to WatchAgent")
+                .font(.title2.bold())
+                .foregroundStyle(.white)
+            Text("Tell us about your taste in movies and TV shows to get personalized recommendations.")
+                .font(.subheadline)
+                .foregroundStyle(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            Button {
+                onGoToChat?()
+            } label: {
+                Text("Get Started")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.primary)
+            .padding(.horizontal, 48)
+            Spacer()
         }
     }
 }
