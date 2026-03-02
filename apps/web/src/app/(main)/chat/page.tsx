@@ -150,14 +150,15 @@ export default function ChatPage() {
         message: userMessage,
       });
 
-      if (result.isSearch && result.searchResults && result.searchResults.length > 0) {
+      const searchResults = result.searchResults;
+      if (result.isSearch && searchResults && searchResults.length > 0) {
         setThread((prev) => [
           ...prev,
-          { role: 'assistant', kind: 'search', content: result.message, cards: result.searchResults },
+          { role: 'assistant', kind: 'search', content: result.message, cards: searchResults },
         ]);
         sessionStorage.setItem('watchagent_last_search', JSON.stringify({
           content: result.message,
-          cards: result.searchResults,
+          cards: searchResults,
         }));
       } else {
         setThread((prev) => [
