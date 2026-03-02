@@ -150,7 +150,7 @@ export default function ChatPage() {
         message: userMessage,
       });
 
-      if (result.isSearch && result.searchResults?.length > 0) {
+      if (result.isSearch && result.searchResults && result.searchResults.length > 0) {
         setThread((prev) => [
           ...prev,
           { role: 'assistant', kind: 'search', content: result.message, cards: result.searchResults },
