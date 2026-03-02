@@ -22,7 +22,7 @@ enum WatchlistStatus: String, Codable, CaseIterable {
     }
 }
 
-struct WatchlistItem: Decodable, Identifiable {
+struct WatchlistItem: Decodable, Identifiable, Sendable {
     let id: String
     let userId: String
     let contentId: String
@@ -35,7 +35,7 @@ struct WatchlistItem: Decodable, Identifiable {
     let content: ContentCard
 }
 
-struct WatchlistCheckResponse: Decodable {
+struct WatchlistCheckResponse: Decodable, Sendable {
     let inWatchlist: Bool
     let itemId: String?
 }

@@ -1,13 +1,13 @@
 import Foundation
 
-struct Conversation: Decodable {
+struct Conversation: Decodable, Sendable {
     let conversationId: String
     let messages: [ChatMessage]
     let isOnboarding: Bool
     let onboardingCompleted: Bool
 }
 
-struct ChatMessage: Decodable, Identifiable {
+struct ChatMessage: Decodable, Identifiable, Sendable {
     let role: ChatRole
     let content: String
     let timestamp: String?
@@ -15,17 +15,17 @@ struct ChatMessage: Decodable, Identifiable {
     var id: String { "\(role.rawValue)-\(timestamp ?? UUID().uuidString)" }
 }
 
-enum ChatRole: String, Decodable {
+enum ChatRole: String, Decodable, Sendable {
     case user
     case assistant
 }
 
-struct InitOnboardingResponse: Decodable {
+struct InitOnboardingResponse: Decodable, Sendable {
     let message: String
     let conversationId: String
 }
 
-struct SendMessageResponse: Decodable {
+struct SendMessageResponse: Decodable, Sendable {
     let message: String
     let onboardingCompleted: Bool?
     let isSearch: Bool?

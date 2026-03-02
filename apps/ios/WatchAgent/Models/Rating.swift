@@ -1,6 +1,6 @@
 import Foundation
 
-struct Rating: Decodable, Identifiable {
+struct Rating: Decodable, Identifiable, Sendable {
     let id: String
     let userId: String
     let contentId: String
@@ -13,7 +13,7 @@ struct Rating: Decodable, Identifiable {
     let user: RatingUser?
 }
 
-struct RatingUser: Decodable {
+struct RatingUser: Decodable, Sendable {
     let id: String
     let username: String
     let avatarUrl: String?

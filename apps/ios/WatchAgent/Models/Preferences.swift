@@ -1,6 +1,6 @@
 import Foundation
 
-struct UserPreferences: Decodable {
+struct UserPreferences: Decodable, Sendable {
     let id: String?
     let userId: String?
     let preferredGenres: [Int]?
@@ -43,7 +43,7 @@ struct UserPreferences: Decodable {
     }
 }
 
-struct NotificationSettings: Decodable {
+struct NotificationSettings: Decodable, Sendable {
     let emailNotifications: Bool?
     let pushNotifications: Bool?
     let newRecommendations: Bool?
@@ -52,7 +52,7 @@ struct NotificationSettings: Decodable {
     let watchlistUpdates: Bool?
 }
 
-struct LearnedPreferences: Decodable {
+struct LearnedPreferences: Decodable, Sendable {
     let favoriteMovies: [String]?
     let favoriteGenres: [String]?
     let favoriteActors: [String]?

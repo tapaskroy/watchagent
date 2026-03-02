@@ -9,20 +9,20 @@ struct User: Codable, Identifiable, Sendable {
     var avatarUrl: String?
 }
 
-struct UserProfile: Decodable {
+struct UserProfile: Decodable, Sendable {
     let user: User
     let preferences: UserPreferences
     let stats: UserStats
     let likedContent: [LikedContent]
 }
 
-struct UserStats: Decodable {
+struct UserStats: Decodable, Sendable {
     let totalRatings: Int
     let totalWatchlistItems: Int
     let averageRating: Double
 }
 
-struct LikedContent: Decodable, Identifiable {
+struct LikedContent: Decodable, Identifiable, Sendable {
     let id: String
     let tmdbId: String
     let type: ContentType

@@ -130,6 +130,7 @@
 		CC51B8ACF41F064E12A00254 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CD445119C5AD0610713FD02A /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		CDCB8A5CE3E4432F11E799C6 /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
+		CEF73351D7755DD4151FF121 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		CF2501DF134028E60F8AA244 /* Watchlist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Watchlist.swift; sourceTree = "<group>"; };
 		CF7B969928B1CBDA709BE839 /* PosterGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PosterGridView.swift; sourceTree = "<group>"; };
 		D3A876654D995A840577CBA6 /* Date+Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Formatting.swift"; sourceTree = "<group>"; };
@@ -202,6 +203,7 @@
 			isa = PBXGroup;
 			children = (
 				CC51B8ACF41F064E12A00254 /* Assets.xcassets */,
+				CEF73351D7755DD4151FF121 /* Info.plist */,
 				9025C0F1A3DE3A9F8E1F53DE /* App */,
 				09E674E054CE108786B27755 /* Config */,
 				6E287159B4807060F801EC99 /* Extensions */,
@@ -393,7 +395,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1500;
+				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					2CCB498D829F178B5FC19101 = {
 						DevelopmentTeam = "";
@@ -510,8 +512,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_VALUES = "CFBundleDisplayName=WatchAgent; CFBundleName=WatchAgent; CFBundleShortVersionString=1.0.0; CFBundleVersion=1; UILaunchScreen={}; UISupportedInterfaceOrientations=UIInterfaceOrientationPortrait; UISupportedInterfaceOrientations~ipad=UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight;";
+				INFOPLIST_FILE = WatchAgent/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -576,7 +577,7 @@
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_VERSION = 5.9;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
@@ -586,8 +587,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_VALUES = "CFBundleDisplayName=WatchAgent; CFBundleName=WatchAgent; CFBundleShortVersionString=1.0.0; CFBundleVersion=1; UILaunchScreen={}; UISupportedInterfaceOrientations=UIInterfaceOrientationPortrait; UISupportedInterfaceOrientations~ipad=UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight;";
+				INFOPLIST_FILE = WatchAgent/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -659,7 +659,7 @@
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.9;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
 		};

@@ -1,6 +1,6 @@
 import Foundation
 
-struct Recommendation: Decodable, Identifiable {
+struct Recommendation: Decodable, Identifiable, Sendable {
     let id: String
     let userId: String?
     let contentId: String?
@@ -28,7 +28,7 @@ enum FeedbackAction: String, Encodable {
     case watched
 }
 
-struct FeedbackResponse: Decodable {
+struct FeedbackResponse: Decodable, Sendable {
     let success: Bool?
     let message: String?
     let preferencesUpdated: Bool?
