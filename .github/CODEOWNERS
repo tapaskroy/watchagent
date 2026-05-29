@@ -1,0 +1,9 @@
+# Code owners for WatchAgent.
+# GitHub auto-requests these owners for review on any PR that touches
+# matching paths. Combined with the `main` branch ruleset (1 required
+# approval), this ensures the maintainer reviews every change.
+#
+# Syntax: <path pattern>  <owner(s)>
+
+# Everything is owned by the maintainer.
+*       @tapaskroy
