@@ -3,7 +3,9 @@
 # Model: a dedicated IAM user with PowerUserAccess (everything except IAM/Org)
 # PLUS a scoped IAM-management policy so Terraform can create the project's
 # roles — all capped by a permissions boundary that prevents privilege
-# escalation.
+# escalation. The boundary also denies access to production secrets
+# (PowerUser is account-wide for Secrets Manager) — because it is the boundary,
+# the prod-secret fence applies to every role she creates, not just her user.
 #
 # IMPORTANT — credentials are intentionally NOT created here:
 #   Terraform creating an access key or login profile would persist the secret
@@ -28,6 +30,9 @@ locals {
   # The delegation (IAM-management) policy must be protected from self-edit too,
   # otherwise she could version it to grant herself an unconditional CreateRole.
   managed_delegation_policy_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.project_name}-collaborator-iam-management"
+  # Production secret ARNs to fence off (Secrets Manager appends a random
+  # suffix to the `${project_name}-prod-*` name_prefix, so wildcard the tail).
+  prod_secret_arn_pattern = "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}-prod-*"
   # Service principals the project's roles are passed to (ECS tasks, CodeBuild).
   passrole_services = [
     "ecs-tasks.amazonaws.com",
@@ -93,6 +98,22 @@ resource "aws_iam_policy" "collaborator_boundary" {
           local.managed_policy_arn,
           local.managed_delegation_policy_arn
         ]
+      },
+      {
+        # Fence off PRODUCTION secrets. PowerUser grants account-wide Secrets
+        # Manager access, which would let her (or any role she creates) read or
+        # overwrite prod secrets — DB password, JWT secrets, API keys. Living in
+        # the boundary means the fence applies to her user AND every role she
+        # mints, so she can't route around it via a staging task role. Staging
+        # secrets (`${project_name}-staging-*`) are unaffected.
+        #
+        # NOTE: fences SECRETS only. The PowerUser model still lets her touch
+        # other prod NON-IAM resources (ECS, RDS, Route53) — a deliberate
+        # tradeoff. Fencing those would need broader Deny scoping here.
+        Sid      = "DenyProdSecrets"
+        Effect   = "Deny"
+        Action   = "secretsmanager:*"
+        Resource = local.prod_secret_arn_pattern
       },
       {
         # Boundary-side backstop: every role she creates MUST carry this
