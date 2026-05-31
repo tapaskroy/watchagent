@@ -18,12 +18,21 @@
 
 locals {
   collaborator_name = "akanksha"
-  # Roles/policies Terraform manages all share the project prefix.
-  managed_iam_arn_prefix = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-*"
-  managed_policy_arn     = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.project_name}-collaborator-boundary"
+  # She is provisioned to build STAGING infra (#4). Scope her IAM write to the
+  # staging name prefix only, so she cannot touch production roles/policies
+  # (which share the `${var.project_name}-prod-*` pattern).
+  collaborator_env_prefix = "${var.project_name}-staging"
+  managed_iam_arn_prefix  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.collaborator_env_prefix}-*"
+  managed_policy_prefix   = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${local.collaborator_env_prefix}-*"
+  managed_policy_arn      = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.project_name}-collaborator-boundary"
   # The delegation (IAM-management) policy must be protected from self-edit too,
   # otherwise she could version it to grant herself an unconditional CreateRole.
   managed_delegation_policy_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.project_name}-collaborator-iam-management"
+  # Service principals the project's roles are passed to (ECS tasks, CodeBuild).
+  passrole_services = [
+    "ecs-tasks.amazonaws.com",
+    "codebuild.amazonaws.com",
+  ]
 }
 
 # ---------------------------------------------------------------------------
@@ -112,9 +121,10 @@ resource "aws_iam_policy" "collaborator_boundary" {
 }
 
 # ---------------------------------------------------------------------------
-# Scoped IAM-management policy — lets Terraform create/manage the project's
+# Scoped IAM-management policy — lets Terraform create/manage the staging
 # roles and policies (ECS task roles, CodeBuild role, etc.), but only under
-# the project name prefix and only with the boundary attached.
+# the `${project_name}-staging-*` prefix and only with the boundary attached.
+# Production roles/policies (`${project_name}-prod-*`) are out of reach.
 # ---------------------------------------------------------------------------
 resource "aws_iam_policy" "collaborator_iam_management" {
   name        = "${var.project_name}-collaborator-iam-management"
@@ -166,10 +176,17 @@ resource "aws_iam_policy" "collaborator_iam_management" {
         }
       },
       {
+        # PassRole limited to the services that actually consume project roles,
+        # so a role can't be passed to an arbitrary service for escalation.
         Sid      = "PassProjectRoles"
         Effect   = "Allow"
         Action   = "iam:PassRole"
         Resource = local.managed_iam_arn_prefix
+        Condition = {
+          StringEquals = {
+            "iam:PassedToService" = local.passrole_services
+          }
+        }
       },
       {
         Sid    = "ManageProjectCustomerPolicies"
@@ -183,7 +200,7 @@ resource "aws_iam_policy" "collaborator_iam_management" {
           "iam:TagPolicy",
           "iam:UntagPolicy"
         ]
-        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.project_name}-*"
+        Resource = local.managed_policy_prefix
       }
     ]
   })
