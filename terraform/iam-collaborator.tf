@@ -164,6 +164,15 @@ resource "aws_iam_policy" "collaborator_iam_management" {
         Resource = "*"
       },
       {
+        # Let her complete the forced first-login password reset and rotate her
+        # own console password later. PowerUserAccess excludes all iam:*, so
+        # without this she cannot change her own password. Scoped to her user.
+        Sid      = "ManageOwnPassword"
+        Effect   = "Allow"
+        Action   = "iam:ChangePassword"
+        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/${local.collaborator_name}"
+      },
+      {
         Sid    = "ManageProjectRoles"
         Effect = "Allow"
         Action = [
