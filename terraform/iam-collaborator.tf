@@ -21,6 +21,9 @@ locals {
   # Roles/policies Terraform manages all share the project prefix.
   managed_iam_arn_prefix = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-*"
   managed_policy_arn     = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.project_name}-collaborator-boundary"
+  # The delegation (IAM-management) policy must be protected from self-edit too,
+  # otherwise she could version it to grant herself an unconditional CreateRole.
+  managed_delegation_policy_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.project_name}-collaborator-iam-management"
 }
 
 # ---------------------------------------------------------------------------
@@ -64,7 +67,11 @@ resource "aws_iam_policy" "collaborator_boundary" {
         Resource = "*"
       },
       {
-        Sid    = "DenyEditingTheBoundaryItself"
+        # Protect BOTH governing policies: the boundary itself AND the
+        # delegation policy. If she could version the delegation policy she
+        # could grant herself an unconditional iam:CreateRole and escape the
+        # cap below.
+        Sid    = "DenyEditingGoverningPolicies"
         Effect = "Deny"
         Action = [
           "iam:CreatePolicyVersion",
@@ -72,8 +79,29 @@ resource "aws_iam_policy" "collaborator_boundary" {
           "iam:SetDefaultPolicyVersion",
           "iam:DeletePolicy"
         ]
-        # Construct the ARN by name (not a resource ref) to avoid a self-cycle.
-        Resource = local.managed_policy_arn
+        # Construct the ARNs by name (not resource refs) to avoid a self-cycle.
+        Resource = [
+          local.managed_policy_arn,
+          local.managed_delegation_policy_arn
+        ]
+      },
+      {
+        # Boundary-side backstop: every role she creates MUST carry this
+        # boundary. The matching Allow condition lives in the delegation
+        # policy, but that policy is identity-side and could be rewritten;
+        # enforcing it here too means a created role can never escape the cap.
+        Sid    = "DenyCreateRoleWithoutBoundary"
+        Effect = "Deny"
+        Action = [
+          "iam:CreateRole",
+          "iam:PutRolePermissionsBoundary"
+        ]
+        Resource = "*"
+        Condition = {
+          StringNotEquals = {
+            "iam:PermissionsBoundary" = local.managed_policy_arn
+          }
+        }
       }
     ]
   })
