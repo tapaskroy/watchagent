@@ -3,7 +3,8 @@
 # Model: a dedicated IAM user with PowerUserAccess (everything except IAM/Org)
 # PLUS a scoped IAM-management policy so Terraform can create the project's
 # roles — all capped by a permissions boundary that prevents privilege
-# escalation.
+# escalation. A separate prod-guard policy additionally denies access to
+# production secrets (PowerUser is account-wide for Secrets Manager).
 #
 # IMPORTANT — credentials are intentionally NOT created here:
 #   Terraform creating an access key or login profile would persist the secret
@@ -28,6 +29,10 @@ locals {
   # The delegation (IAM-management) policy must be protected from self-edit too,
   # otherwise she could version it to grant herself an unconditional CreateRole.
   managed_delegation_policy_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.project_name}-collaborator-iam-management"
+  managed_prod_guard_policy_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.project_name}-collaborator-prod-guard"
+  # Production secret ARNs to fence off (Secrets Manager appends a random
+  # suffix to the `${project_name}-prod-*` name_prefix, so wildcard the tail).
+  prod_secret_arn_pattern = "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}-prod-*"
   # Service principals the project's roles are passed to (ECS tasks, CodeBuild).
   passrole_services = [
     "ecs-tasks.amazonaws.com",
@@ -91,7 +96,8 @@ resource "aws_iam_policy" "collaborator_boundary" {
         # Construct the ARNs by name (not resource refs) to avoid a self-cycle.
         Resource = [
           local.managed_policy_arn,
-          local.managed_delegation_policy_arn
+          local.managed_delegation_policy_arn,
+          local.managed_prod_guard_policy_arn
         ]
       },
       {
@@ -211,6 +217,45 @@ resource "aws_iam_policy" "collaborator_iam_management" {
 }
 
 # ---------------------------------------------------------------------------
+# Production guardrail — PowerUserAccess grants account-wide Secrets Manager
+# access, which would let her read or overwrite PROD secrets (DB password, JWT
+# secrets, API keys). She only needs STAGING secrets, so explicitly deny the
+# value-access and mutation actions on the prod secret ARNs. A Deny here beats
+# any Allow she inherits from PowerUser.
+#
+# NOTE: this fences SECRETS only. The simple PowerUser model still lets her
+# touch other prod NON-IAM resources (ECS, RDS, Route53). Fencing those would
+# require broader Deny scoping — a deliberate tradeoff of keeping this simple.
+# ---------------------------------------------------------------------------
+resource "aws_iam_policy" "collaborator_prod_guard" {
+  name        = "${var.project_name}-collaborator-prod-guard"
+  description = "Denies WatchAgent collaborators access to production secrets"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "DenyProdSecretsAccess"
+        Effect = "Deny"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:PutSecretValue",
+          "secretsmanager:UpdateSecret",
+          "secretsmanager:UpdateSecretVersionStage",
+          "secretsmanager:DeleteSecret",
+          "secretsmanager:RestoreSecret"
+        ]
+        Resource = local.prod_secret_arn_pattern
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.project_name}-collaborator-prod-guard"
+  }
+}
+
+# ---------------------------------------------------------------------------
 # The collaborator user.
 # ---------------------------------------------------------------------------
 resource "aws_iam_user" "collaborator" {
@@ -231,6 +276,11 @@ resource "aws_iam_user_policy_attachment" "collaborator_poweruser" {
 resource "aws_iam_user_policy_attachment" "collaborator_iam_management" {
   user       = aws_iam_user.collaborator.name
   policy_arn = aws_iam_policy.collaborator_iam_management.arn
+}
+
+resource "aws_iam_user_policy_attachment" "collaborator_prod_guard" {
+  user       = aws_iam_user.collaborator.name
+  policy_arn = aws_iam_policy.collaborator_prod_guard.arn
 }
 
 output "collaborator_user_name" {
