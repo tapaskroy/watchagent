@@ -2,7 +2,8 @@
 
 # IAM role for CodeBuild
 resource "aws_iam_role" "codebuild" {
-  name = "${var.project_name}-${var.environment}-codebuild-role"
+  name                 = "${var.project_name}-${var.environment}-codebuild-role"
+  permissions_boundary = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/watchagent-collaborator-boundary"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -122,7 +123,7 @@ resource "aws_codebuild_project" "docker_build" {
   source {
     type      = "S3"
     location  = "${aws_s3_bucket.codebuild_source.bucket}/source.zip"
-    buildspec = "buildspec.yml"
+    buildspec = "buildspec-staging.yml"
   }
 
   logs_config {

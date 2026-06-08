@@ -47,19 +47,33 @@ Docker builds run `npm run build` automatically, so only source needs to be comm
 
 ## Deployment
 
-**Deployment flow:** push to `main` → manually trigger CodeBuild → builds Docker images → pushes to ECR → ECS force-new-deployment
+**Deployment flow:** push to branch → manually trigger CodeBuild → builds Docker images → pushes to ECR → ECS force-new-deployment
 
-### Trigger a build
+### Production
+
 ```bash
 aws codebuild start-build --project-name watchagent-prod-docker-build --source-version main
 ```
 
-> Note: GitHub webhook is configured but intentionally not used. Always trigger manually.
-
-### Verify deployment
+Verify:
 ```bash
 curl -sk https://watchagent.tapaskroy.me/login | grep -o "0\.[0-9]*"
 ```
+
+### Staging
+
+**Staging URL:** https://staging.watchagent.tapaskroy.me
+
+```bash
+aws codebuild start-build --project-name watchagent-staging-docker-build --source-version main
+```
+
+Verify:
+```bash
+curl -sk https://staging.watchagent.tapaskroy.me/login | grep -o "0\.[0-9]*"
+```
+
+> Note: GitHub webhook is configured but intentionally not used. Always trigger manually.
 
 ### Monitor ECS rollout
 ECS replaces tasks ~2 min after CodeBuild succeeds. The curl check above confirms the new version is live.
@@ -73,6 +87,8 @@ Bump `apps/web/src/lib/version.ts` before every deployment. Current version: **0
 
 ## AWS Infrastructure
 
+### Production
+
 | Component | Detail |
 |---|---|
 | Traffic flow | Route53 → ALB → ECS Fargate |
@@ -81,6 +97,21 @@ Bump `apps/web/src/lib/version.ts` before every deployment. Current version: **0
 | ECR images | `269267980934.dkr.ecr.us-east-1.amazonaws.com/watchagent-prod-{web,api}` |
 | Logs | `/ecs/watchagent-prod-api`, `/ecs/watchagent-prod-web` |
 | CodeBuild project | `watchagent-prod-docker-build` |
+| Terraform | `terraform/` |
+
+### Staging
+
+| Component | Detail |
+|---|---|
+| Traffic flow | Route53 → ALB → ECS Fargate |
+| Web service | `watchagent-staging-web` (port 3001) |
+| API service | `watchagent-staging-api` (port 3000) |
+| ECR images | `269267980934.dkr.ecr.us-east-1.amazonaws.com/watchagent-staging-{web,api}` |
+| Logs | `/ecs/watchagent-staging-api`, `/ecs/watchagent-staging-web` (7-day retention) |
+| CodeBuild project | `watchagent-staging-docker-build` |
+| Terraform | `terraform-staging/` |
+| VPC CIDR | `10.1.0.0/16` (prod uses `10.0.0.0/16`) |
+| ECS tasks | 1 desired, 2 max (prod: 2 desired, 4 max) |
 
 **EC2 instance `i-0e85530f1d5cbda8c` is a test box — NOT production. Do not deploy to it.**
 

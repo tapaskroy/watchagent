@@ -120,6 +120,7 @@ yarn-error.log
 .terraform/
 *.tfvars
 !terraform.tfvars.example
+!terraform.staging.tfvars.example
 
 # Docker
 docker-compose.override.yml
