@@ -12,9 +12,9 @@
     "build": "echo 'Mobile build handled by platform-specific tools'",
     "clean": "rm -rf android/build ios/build",
     "test": "jest",
-    "test:unit": "jest --testPathPattern='.*.test.tsx?$'",
+    "test:unit": "jest --testPathPattern='.*.test.tsx?$' --passWithNoTests",
     "test:e2e": "detox test",
-    "lint": "echo 'Mobile app is a stub — no source to lint yet'"
+    "lint": "echo 'Mobile app is a stub \u2014 no source to lint yet'"
   },
   "dependencies": {
     "@watchagent/shared": "*",

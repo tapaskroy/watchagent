@@ -10,7 +10,7 @@
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
     "test": "jest",
-    "test:unit": "jest --testPathPattern='.*.test.ts$'",
+    "test:unit": "jest --testPathPattern='.*.test.ts$' --passWithNoTests",
     "lint": "eslint src"
   },
   "dependencies": {
