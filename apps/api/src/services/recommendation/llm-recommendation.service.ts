@@ -492,7 +492,7 @@ Generate exactly ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} recommendations. F
    * NOTE: Currently unused - we let Claude recommend freely from TMDB
    * Keeping for potential future use
    */
-
+  // @ts-expect-error - TS6133: method is intentionally kept but unused
   private async getCandidateContentEnhanced(context: EnhancedUserContext): Promise<ContentCandidate[]> {
     const candidates = new Map<string, ContentCandidate>();
 

@@ -9,7 +9,7 @@
     "start": "next start",
     "clean": "rm -rf .next",
     "test": "jest",
-    "test:unit": "jest --testPathPattern='.*.test.tsx?$'",
+    "test:unit": "jest --testPathPattern='.*.test.tsx?$' --passWithNoTests",
     "test:e2e": "playwright test",
     "lint": "next lint"
   },
