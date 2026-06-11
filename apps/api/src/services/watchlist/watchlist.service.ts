@@ -99,7 +99,7 @@ export class WatchlistService {
     filters: GetWatchlistRequest
   ): Promise<{ items: WatchlistItem[]; total: number }> {
     // Build query
-    let query = db.query.watchlistItems.findMany({
+    const query = db.query.watchlistItems.findMany({
       where: filters.status
         ? and(eq(watchlistItems.userId, userId), eq(watchlistItems.status, filters.status))
         : eq(watchlistItems.userId, userId),

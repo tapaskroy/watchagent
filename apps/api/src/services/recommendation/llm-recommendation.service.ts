@@ -233,7 +233,7 @@ export class LLMRecommendationService {
 
   /**
    * Build user context for recommendations
-  // @ts-ignore - Deprecated but kept for reference
+  // @ts-expect-error - Deprecated but kept for reference
    */
 
   /**
@@ -492,7 +492,7 @@ Generate exactly ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} recommendations. F
    * NOTE: Currently unused - we let Claude recommend freely from TMDB
    * Keeping for potential future use
    */
-  // @ts-ignore - Deprecated but kept for reference
+  // @ts-expect-error - Deprecated but kept for reference
   private async getCandidateContentEnhanced(context: EnhancedUserContext): Promise<ContentCandidate[]> {
     const candidates = new Map<string, ContentCandidate>();
 
@@ -539,7 +539,7 @@ Generate exactly ${RECOMMENDATION_CONFIG.MAX_RECOMMENDATIONS} recommendations. F
    * Helper to add candidates to map
    * NOTE: Currently unused - kept for potential future use
    */
-  // @ts-ignore - Deprecated but kept for reference
+  // @ts-expect-error - Deprecated but kept for reference
   private addCandidates(candidates: Map<string, ContentCandidate>, items: any[], limit: number): void {
     let added = 0;
     for (const item of items) {

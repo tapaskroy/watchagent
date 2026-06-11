@@ -197,7 +197,7 @@ export class PreferencesService {
     data: UpdatePreferencesRequest
   ): Promise<UserPreferences> {
     // Get or create preferences
-    let preferences = await db.query.userPreferences.findFirst({
+    const preferences = await db.query.userPreferences.findFirst({
       where: eq(userPreferences.userId, userId),
     });
 
