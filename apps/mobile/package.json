@@ -14,7 +14,7 @@
     "test": "jest",
     "test:unit": "jest --testPathPattern='.*.test.tsx?$'",
     "test:e2e": "detox test",
-    "lint": "eslint src"
+    "lint": "echo 'Mobile app is a stub — no source to lint yet'"
   },
   "dependencies": {
     "@watchagent/shared": "*",

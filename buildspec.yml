@@ -10,23 +10,26 @@ phases:
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
       - REPOSITORY_API_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/watchagent-prod-api
       - REPOSITORY_WEB_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/watchagent-prod-web
-      - IMAGE_TAG=latest
+      - IMAGE_TAG=$(cat VERSION 2>/dev/null | tr -d '[:space:]' || echo "latest")
+      - echo "Image tag - $IMAGE_TAG"
       - echo Build started on `date`
 
   build:
     commands:
       - echo Building API Docker image...
-      - docker build --platform linux/amd64 -t $REPOSITORY_API_URI:$IMAGE_TAG -f apps/api/Dockerfile .
+      - docker build --platform linux/amd64 -t $REPOSITORY_API_URI:$IMAGE_TAG -t $REPOSITORY_API_URI:latest -f apps/api/Dockerfile .
       - echo Building Web Docker image...
-      - docker build --platform linux/amd64 --build-arg NEXT_PUBLIC_API_URL=https://api.watchagent.tapaskroy.me/api/v1 --build-arg NEXT_PUBLIC_TMDB_IMAGE_BASE=https://image.tmdb.org/t/p -t $REPOSITORY_WEB_URI:$IMAGE_TAG -f apps/web/Dockerfile .
+      - docker build --platform linux/amd64 -t $REPOSITORY_WEB_URI:$IMAGE_TAG -t $REPOSITORY_WEB_URI:latest -f apps/web/Dockerfile .
 
   post_build:
     commands:
       - echo Build completed on `date`
       - echo Pushing API image...
       - docker push $REPOSITORY_API_URI:$IMAGE_TAG
+      - docker push $REPOSITORY_API_URI:latest
       - echo Pushing Web image...
       - docker push $REPOSITORY_WEB_URI:$IMAGE_TAG
+      - docker push $REPOSITORY_WEB_URI:latest
       - echo Images pushed successfully
       - echo Forcing ECS redeployment...
       - aws ecs update-service --cluster watchagent-prod-cluster --service watchagent-prod-api --force-new-deployment

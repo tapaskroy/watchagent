@@ -33,6 +33,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${inter.variable} ${poppins.variable}`}>
+      <head>
+        {/* Synchronous — must load before any JS so window.__NEXT_ENV__ is set */}
+        <script src="/env.js" /> {/* eslint-disable-line */}
+      </head>
       <body className="font-sans antialiased">
         <Providers>{children}</Providers>
       </body>

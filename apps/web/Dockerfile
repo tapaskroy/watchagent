@@ -33,12 +33,9 @@ RUN npm run build --workspace=@watchagent/ui
 # Build Next.js app
 # Next.js collects anonymous telemetry data. Disable it.
 ENV NEXT_TELEMETRY_DISABLED 1
-
-# Set production API URL for build
-ARG NEXT_PUBLIC_API_URL=https://api.watchagent.tapaskroy.me/api/v1
-ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
-ARG NEXT_PUBLIC_TMDB_IMAGE_BASE=https://image.tmdb.org/t/p
-ENV NEXT_PUBLIC_TMDB_IMAGE_BASE=${NEXT_PUBLIC_TMDB_IMAGE_BASE}
+# NEXT_PUBLIC_* vars are NOT baked in at build time — they are injected at
+# container startup via entrypoint.sh → public/env.js → window.__NEXT_ENV__.
+# This allows the same image to be deployed to any environment without a rebuild.
 
 RUN npm run build --workspace=@watchagent/web
 
@@ -55,7 +52,9 @@ RUN addgroup --system --gid 1001 nodejs && \
 
 # Copy built application
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next ./apps/web/.next
+# public/ must be writable so entrypoint.sh can generate env.js at container start
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/entrypoint.sh ./apps/web/entrypoint.sh
 
 # Copy package.json and node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/package*.json ./
@@ -66,6 +65,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/packages/shared ./packages/shared
 COPY --from=builder --chown=nextjs:nodejs /app/packages/api-client ./packages/api-client
 COPY --from=builder --chown=nextjs:nodejs /app/packages/ui ./packages/ui
+
+RUN chmod +x ./apps/web/entrypoint.sh
 
 USER nextjs
 
@@ -79,6 +80,5 @@ ENV HOSTNAME "0.0.0.0"
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3001/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-# Start Next.js from the web app directory
-WORKDIR /app/apps/web
-CMD ["../../node_modules/.bin/next", "start", "-p", "3001"]
+WORKDIR /app
+ENTRYPOINT ["./apps/web/entrypoint.sh"]

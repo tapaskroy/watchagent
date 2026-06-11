@@ -65,7 +65,12 @@ curl -sk https://watchagent.tapaskroy.me/login | grep -o "0\.[0-9]*"
 **Staging URL:** https://staging.watchagent.tapaskroy.me
 
 ```bash
-aws codebuild start-build --project-name watchagent-staging-docker-build --source-version main
+# VERSION file gives the buildspec the git SHA for image tagging
+git rev-parse --short HEAD > VERSION
+git archive --format=zip HEAD -o /tmp/source.zip
+zip /tmp/source.zip VERSION buildspec-staging.yml
+aws s3 cp /tmp/source.zip s3://watchagent-staging-codebuild-source/source.zip --region us-east-1
+aws codebuild start-build --project-name watchagent-staging-docker-build --region us-east-1
 ```
 
 Verify:
@@ -123,7 +128,7 @@ Bump `apps/web/src/lib/version.ts` before every deployment. Current version: **0
 - **Sliding window** in `chat.service.ts`: keeps last 15 messages verbatim, summarizes older into `context.summary`.
 - **Recommendations** generated asynchronously on onboarding completion. Home page polls until ready.
 - **Search detection** passes last 6 messages to Claude to resolve vague references ("more like those").
-- **`NEXT_PUBLIC_API_URL`** is baked into the web Docker image at build time via `--build-arg`.
+- **`NEXT_PUBLIC_API_URL`** is injected at container startup via `apps/web/entrypoint.sh` → `public/env.js` → `window.__NEXT_ENV__`. The same Docker image works in any environment without a rebuild.
 
 ---
 

@@ -33,6 +33,11 @@ resource "aws_cloudwatch_log_group" "web" {
 }
 
 # ECS Task Execution Role
+# TODO: permissions_boundary here is watchagent-collaborator-boundary, which is
+# tied to the akanksha IAM user's scoping guardrail. If that policy is deleted or
+# her access revoked, these roles break. Replace with a dedicated staging boundary
+# (or have an admin create these roles without a boundary) before this becomes a
+# long-lived environment. Tracked in: https://github.com/tapaskroy/watchagent/pull/8
 resource "aws_iam_role" "ecs_task_execution" {
   name                 = "${var.project_name}-${var.environment}-ecs-task-execution"
   permissions_boundary = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/watchagent-collaborator-boundary"
