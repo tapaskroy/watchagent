@@ -1,6 +1,6 @@
 version: 0.2
 
-# AWS CodeBuild buildspec for building Docker images
+# AWS CodeBuild buildspec for building Docker images — STAGING environment
 # Builds both API and Web images for linux/amd64 and pushes to ECR
 
 phases:
@@ -8,8 +8,8 @@ phases:
     commands:
       - echo Logging in to Amazon ECR...
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
-      - REPOSITORY_API_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/watchagent-prod-api
-      - REPOSITORY_WEB_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/watchagent-prod-web
+      - REPOSITORY_API_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/watchagent-staging-api
+      - REPOSITORY_WEB_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/watchagent-staging-web
       - IMAGE_TAG=$(cat VERSION 2>/dev/null | tr -d '[:space:]' || echo "latest")
       - echo "Image tag - $IMAGE_TAG"
       - echo Build started on `date`
@@ -32,6 +32,6 @@ phases:
       - docker push $REPOSITORY_WEB_URI:latest
       - echo Images pushed successfully
       - echo Forcing ECS redeployment...
-      - aws ecs update-service --cluster watchagent-prod-cluster --service watchagent-prod-api --force-new-deployment
-      - aws ecs update-service --cluster watchagent-prod-cluster --service watchagent-prod-web --force-new-deployment
+      - aws ecs update-service --cluster watchagent-staging-cluster --service watchagent-staging-api --force-new-deployment
+      - aws ecs update-service --cluster watchagent-staging-cluster --service watchagent-staging-web --force-new-deployment
       - echo ECS redeployment triggered

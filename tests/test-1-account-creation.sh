@@ -5,9 +5,9 @@
 
 set -e  # Exit on error
 
-API_BASE="http://localhost:3000"
-API_URL="http://localhost:3000/api/v1"
-WEB_URL="http://localhost:3001"
+API_BASE="${API_BASE:-http://localhost:3000}"
+API_URL="${API_URL:-http://localhost:3000/api/v1}"
+WEB_URL="${WEB_URL:-http://localhost:3001}"
 
 # Colors for output
 GREEN='\033[0;32m'

@@ -10,7 +10,7 @@
     "start": "node dist/index.js",
     "clean": "rm -rf dist",
     "test": "jest",
-    "test:unit": "jest --testPathPattern='.*.test.ts$'",
+    "test:unit": "jest --testPathPattern='.*.test.ts$' --passWithNoTests",
     "test:integration": "jest --testPathPattern='.*.integration.test.ts$'",
     "lint": "eslint src"
   },

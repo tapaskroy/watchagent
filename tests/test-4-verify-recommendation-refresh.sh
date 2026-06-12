@@ -5,7 +5,7 @@
 
 set -e
 
-API_URL="http://localhost:3000/api/v1"
+API_URL="${API_URL:-http://localhost:3000/api/v1}"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'

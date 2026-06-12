@@ -3,8 +3,20 @@
  * Base configuration for API communication
  */
 
+// window.__NEXT_ENV__ is injected at container startup by apps/web/entrypoint.sh
+// so that the same Docker image works in every environment without a rebuild.
+// Falls back to the Next.js build-time value (used in local dev / SSR).
+function getApiBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    const runtimeUrl = (window as Window & { __NEXT_ENV__?: { NEXT_PUBLIC_API_URL?: string } })
+      .__NEXT_ENV__?.NEXT_PUBLIC_API_URL;
+    if (runtimeUrl) return runtimeUrl;
+  }
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1';
+}
+
 export const API_CONFIG = {
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1',
+  baseURL: getApiBaseUrl(),
   timeout: 30000,
   retryAttempts: 3,
   retryDelay: 1000,

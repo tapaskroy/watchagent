@@ -8,7 +8,7 @@
 
 set -e  # Exit on error
 
-API_URL="http://localhost:3000/api/v1"
+API_URL="${API_URL:-http://localhost:3000/api/v1}"
 
 # Colors for output
 GREEN='\033[0;32m'
