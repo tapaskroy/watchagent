@@ -34,7 +34,8 @@ resource "aws_cloudwatch_log_group" "web" {
 
 # ECS Task Execution Role
 resource "aws_iam_role" "ecs_task_execution" {
-  name = "${var.project_name}-${var.environment}-ecs-task-execution"
+  name                 = "${var.project_name}-${var.environment}-ecs-task-execution"
+  permissions_boundary = var.permissions_boundary_arn
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -89,7 +90,8 @@ resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
 
 # ECS Task Role (for application to access AWS services)
 resource "aws_iam_role" "ecs_task" {
-  name = "${var.project_name}-${var.environment}-ecs-task"
+  name                 = "${var.project_name}-${var.environment}-ecs-task"
+  permissions_boundary = var.permissions_boundary_arn
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

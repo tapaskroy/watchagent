@@ -153,6 +153,19 @@ variable "web_autoscaling_max" {
   default     = 4
 }
 
+# IAM / Networking — environment-specific constraints
+variable "permissions_boundary_arn" {
+  description = "ARN of an IAM permissions boundary to attach to all created roles. Set for environments where IAM is collaborator-scoped; leave null for prod."
+  type        = string
+  default     = null
+}
+
+variable "enable_vpc_flow_logs" {
+  description = "Enable VPC flow logs. Disable when IAM naming constraints prevent creating the flow-log IAM role (e.g. collaborator-bounded staging)."
+  type        = bool
+  default     = true
+}
+
 # Secrets Configuration
 variable "tmdb_api_key" {
   description = "TMDB API Key (stored in Secrets Manager)"

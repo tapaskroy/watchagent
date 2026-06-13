@@ -8,11 +8,13 @@ terraform {
     }
   }
 
-  # Store Terraform state in S3 (recommended for team collaboration)
-  # Uncomment and configure after creating the S3 bucket
+  # Store Terraform state in S3 with workspace isolation.
+  # With workspaces, the S3 key becomes env:/<workspace>/terraform.tfstate
+  # automatically — no separate key per environment needed.
+  # Uncomment after creating the S3 bucket and DynamoDB table (see issue #11).
   # backend "s3" {
   #   bucket         = "watchagent-terraform-state"
-  #   key            = "prod/terraform.tfstate"
+  #   key            = "terraform.tfstate"
   #   region         = "us-east-1"
   #   encrypt        = true
   #   dynamodb_table = "watchagent-terraform-locks"

@@ -16,10 +16,11 @@ module "vpc" {
   enable_dns_hostnames = true
   enable_dns_support   = true
 
-  # VPC Flow Logs
-  enable_flow_log                      = true
-  create_flow_log_cloudwatch_iam_role  = true
-  create_flow_log_cloudwatch_log_group = true
+  # VPC Flow Logs — disable when IAM naming constraints prevent creating
+  # the flow-log IAM role (e.g. collaborator-scoped staging environment)
+  enable_flow_log                      = var.enable_vpc_flow_logs
+  create_flow_log_cloudwatch_iam_role  = var.enable_vpc_flow_logs
+  create_flow_log_cloudwatch_log_group = var.enable_vpc_flow_logs
 
   tags = {
     Name = "${var.project_name}-${var.environment}-vpc"

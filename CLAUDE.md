@@ -108,6 +108,27 @@ Bump `apps/web/src/lib/version.ts` before every deployment. Current version: **0
 
 ## AWS Infrastructure
 
+Both environments are managed from `terraform/` using Terraform workspaces and per-env tfvars. Staging state lives in the `staging` workspace; prod in `prod`.
+
+```bash
+# First-time workspace setup (one-off):
+cd terraform
+terraform workspace new prod
+terraform workspace new staging
+
+# Apply staging:
+terraform workspace select staging
+terraform apply -var-file=staging.tfvars
+
+# Apply prod:
+terraform workspace select prod
+terraform apply -var-file=prod.tfvars
+```
+
+Secrets (`TF_VAR_tmdb_api_key`, `TF_VAR_omdb_api_key`, `TF_VAR_anthropic_api_key`) must be exported as env vars — never added to tfvars files.
+
+**State migration:** existing local state from `terraform-staging/terraform.tfstate` must be copied to `terraform/terraform.tfstate.d/staging/terraform.tfstate` before `plan` shows zero diffs for staging (see issue #11).
+
 ### Production
 
 | Component | Detail |
@@ -118,7 +139,7 @@ Bump `apps/web/src/lib/version.ts` before every deployment. Current version: **0
 | ECR images | `269267980934.dkr.ecr.us-east-1.amazonaws.com/watchagent-prod-{web,api}` |
 | Logs | `/ecs/watchagent-prod-api`, `/ecs/watchagent-prod-web` |
 | CodeBuild project | `watchagent-prod-docker-build` |
-| Terraform | `terraform/` |
+| Terraform workspace | `prod` |
 
 ### Staging
 
@@ -130,7 +151,7 @@ Bump `apps/web/src/lib/version.ts` before every deployment. Current version: **0
 | ECR images | `269267980934.dkr.ecr.us-east-1.amazonaws.com/watchagent-staging-{web,api}` |
 | Logs | `/ecs/watchagent-staging-api`, `/ecs/watchagent-staging-web` (7-day retention) |
 | CodeBuild project | `watchagent-staging-docker-build` |
-| Terraform | `terraform-staging/` |
+| Terraform workspace | `staging` |
 | VPC CIDR | `10.1.0.0/16` (prod uses `10.0.0.0/16`) |
 | ECS tasks | 1 desired, 2 max (prod: 2 desired, 4 max) |
 
