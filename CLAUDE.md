@@ -47,41 +47,57 @@ Docker builds run `npm run build` automatically, so only source needs to be comm
 
 ## Deployment
 
-**Deployment flow:** push to branch → manually trigger CodeBuild → builds Docker images → pushes to ECR → ECS force-new-deployment
+**Normal flow:** build staging → verify → promote to prod (no rebuild).
 
-### Production
+### 1. Build and deploy to staging
 
 ```bash
-aws codebuild start-build --project-name watchagent-prod-docker-build --source-version main
+SHA=$(git rev-parse --short HEAD)
+git archive --format=zip HEAD -o /tmp/source.zip
+zip /tmp/source.zip buildspec-staging.yml
+aws s3 cp /tmp/source.zip s3://watchagent-staging-codebuild-source/source.zip --region us-east-1
+aws codebuild start-build \
+  --project-name watchagent-staging-docker-build \
+  --region us-east-1 \
+  --environment-variables-override name=GIT_SHA,value=$SHA,type=PLAINTEXT
 ```
 
-Verify:
+Verify staging:
+```bash
+curl -sk https://staging.watchagent.tapaskroy.me/login | grep -o "0\.[0-9]*"
+```
+
+### 2. Promote staging image to prod (zero rebuild)
+
+```bash
+bash scripts/promote.sh <git-sha>   # e.g. bash scripts/promote.sh abc1234
+```
+
+`promote.sh` copies the staging ECR image to prod ECR, registers a new ECS task definition revision pinned to that SHA, and deploys it.
+
+Verify prod:
 ```bash
 curl -sk https://watchagent.tapaskroy.me/login | grep -o "0\.[0-9]*"
 ```
 
-### Staging
+### Emergency prod rebuild (skip staging)
 
-**Staging URL:** https://staging.watchagent.tapaskroy.me
+Only use when you need to deploy directly to prod without going through staging:
 
 ```bash
-# VERSION file gives the buildspec the git SHA for image tagging
-git rev-parse --short HEAD > VERSION
+SHA=$(git rev-parse --short HEAD)
 git archive --format=zip HEAD -o /tmp/source.zip
-zip /tmp/source.zip VERSION buildspec-staging.yml
-aws s3 cp /tmp/source.zip s3://watchagent-staging-codebuild-source/source.zip --region us-east-1
-aws codebuild start-build --project-name watchagent-staging-docker-build --region us-east-1
-```
-
-Verify:
-```bash
-curl -sk https://staging.watchagent.tapaskroy.me/login | grep -o "0\.[0-9]*"
+aws s3 cp /tmp/source.zip s3://watchagent-prod-codebuild-source/source.zip --region us-east-1
+aws codebuild start-build \
+  --project-name watchagent-prod-docker-build \
+  --region us-east-1 \
+  --environment-variables-override name=GIT_SHA,value=$SHA,type=PLAINTEXT
 ```
 
 > Note: GitHub webhook is configured but intentionally not used. Always trigger manually.
 
 ### Monitor ECS rollout
-ECS replaces tasks ~2 min after CodeBuild succeeds. The curl check above confirms the new version is live.
+ECS replaces tasks ~2 min after CodeBuild / promote completes. The curl check above confirms the new version is live.
 
 ---
 

@@ -1,7 +1,16 @@
 version: 0.2
 
-# AWS CodeBuild buildspec for building Docker images
-# Builds both API and Web images for linux/amd64 and pushes to ECR
+# AWS CodeBuild buildspec for building Docker images — PRODUCTION
+# Builds both API and Web images for linux/amd64 and pushes to ECR.
+#
+# Trigger with a git SHA so images are tagged immutably:
+#   aws codebuild start-build \
+#     --project-name watchagent-prod-docker-build \
+#     --region us-east-1 \
+#     --environment-variables-override name=GIT_SHA,value=$(git rev-parse --short HEAD),type=PLAINTEXT
+#
+# NOTE: Prefer promoting a staging-tested image over rebuilding for prod:
+#   bash scripts/promote.sh <git-sha>
 
 phases:
   pre_build:
@@ -10,7 +19,7 @@ phases:
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
       - REPOSITORY_API_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/watchagent-prod-api
       - REPOSITORY_WEB_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/watchagent-prod-web
-      - IMAGE_TAG=$(cat VERSION 2>/dev/null | tr -d '[:space:]' || echo "latest")
+      - IMAGE_TAG=${GIT_SHA:-latest}
       - echo "Image tag - $IMAGE_TAG"
       - echo Build started on `date`
 
@@ -30,8 +39,6 @@ phases:
       - echo Pushing Web image...
       - docker push $REPOSITORY_WEB_URI:$IMAGE_TAG
       - docker push $REPOSITORY_WEB_URI:latest
-      - echo Images pushed successfully
-      - echo Forcing ECS redeployment...
-      - aws ecs update-service --cluster watchagent-prod-cluster --service watchagent-prod-api --force-new-deployment
-      - aws ecs update-service --cluster watchagent-prod-cluster --service watchagent-prod-web --force-new-deployment
-      - echo ECS redeployment triggered
+      - echo Images pushed. Deploying to ECS with immutable tag...
+      - bash scripts/deploy.sh prod $IMAGE_TAG
+      - echo Deployment triggered

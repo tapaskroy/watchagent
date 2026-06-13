@@ -67,6 +67,19 @@ resource "aws_iam_role_policy" "codebuild" {
           "ecs:UpdateService"
         ]
         Resource = "arn:aws:ecs:${var.aws_region}:*:service/${var.project_name}-${var.environment}-cluster/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecs:DescribeTaskDefinition",
+          "ecs:RegisterTaskDefinition"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = ["iam:PassRole"]
+        Resource = "arn:aws:iam::*:role/${var.project_name}-${var.environment}-ecs-task*"
       }
     ]
   })

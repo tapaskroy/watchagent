@@ -59,6 +59,26 @@ resource "aws_iam_role_policy" "codebuild" {
           "s3:GetObjectVersion"
         ]
         Resource = "${aws_s3_bucket.codebuild_source.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecs:UpdateService"
+        ]
+        Resource = "arn:aws:ecs:${var.aws_region}:*:service/${var.project_name}-${var.environment}-cluster/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecs:DescribeTaskDefinition",
+          "ecs:RegisterTaskDefinition"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = ["iam:PassRole"]
+        Resource = "arn:aws:iam::*:role/${var.project_name}-${var.environment}-ecs-task*"
       }
     ]
   })
