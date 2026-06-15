@@ -19,8 +19,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
       })
   );
 
+  // Read Google Client ID from runtime config (injected by entrypoint.sh → env.js)
+  // so the same Docker image works across environments without a rebuild.
+  const googleClientId = typeof window !== 'undefined'
+    ? ((window as Window & { __NEXT_ENV__?: { NEXT_PUBLIC_GOOGLE_CLIENT_ID?: string } })
+        .__NEXT_ENV__?.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? '')
+    : (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? '');
+
   return (
-    <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? ''}>
+    <GoogleOAuthProvider clientId={googleClientId}>
       <QueryClientProvider client={queryClient}>
         <AuthInitializer />
         {children}
