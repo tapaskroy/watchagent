@@ -99,4 +99,40 @@ export const authApi = {
   isAuthenticated(): boolean {
     return tokenStorage.hasTokens();
   },
+
+  async googleInitiate(idToken: string): Promise<{ email: string; expiresIn: number }> {
+    const response = await apiClient.post<ApiResponse<{ email: string; expiresIn: number }>>(
+      API_ENDPOINTS.auth.googleInitiate,
+      { idToken }
+    );
+    if (response.data.success && response.data.data) return response.data.data;
+    throw new Error(response.data.error?.message || 'Failed to send verification code');
+  },
+
+  async googleVerify(
+    idToken: string,
+    code: string,
+    flow: 'login' | 'register' = 'login'
+  ): Promise<AuthTokens & { isNewUser: boolean; linkedExistingAccount: boolean }> {
+    const response = await apiClient.post<
+      ApiResponse<AuthTokens & { isNewUser: boolean; linkedExistingAccount: boolean }>
+    >(API_ENDPOINTS.auth.googleVerify, { idToken, code, flow });
+
+    if (response.data.success && response.data.data) {
+      const { accessToken, refreshToken } = response.data.data;
+      tokenStorage.setAccessToken(accessToken);
+      tokenStorage.setRefreshToken(refreshToken);
+      return response.data.data;
+    }
+    throw new Error(response.data.error?.message || 'Verification failed');
+  },
+
+  async googleResend(idToken: string): Promise<{ email: string; expiresIn: number }> {
+    const response = await apiClient.post<ApiResponse<{ email: string; expiresIn: number }>>(
+      API_ENDPOINTS.auth.googleResend,
+      { idToken }
+    );
+    if (response.data.success && response.data.data) return response.data.data;
+    throw new Error(response.data.error?.message || 'Failed to resend code');
+  },
 };

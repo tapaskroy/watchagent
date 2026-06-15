@@ -37,6 +37,17 @@ const envSchema = z.object({
   OMDB_API_KEY: z.string().min(1),
   ANTHROPIC_API_KEY: z.string().min(1),
 
+  // Google OAuth (optional — Google auth endpoints return 503 if not configured)
+  GOOGLE_CLIENT_ID: z.string().default(''),
+
+  // Email (AWS SES)
+  EMAIL_FROM_ADDRESS: z.string().email().default('noreply@watchagent.tapaskroy.me'),
+  EMAIL_FROM_NAME: z.string().default('WatchAgent'),
+  AWS_SES_REGION: z.string().default('us-east-1'),
+
+  // Avatar S3
+  AVATAR_S3_BUCKET: z.string().default('watchagent-prod-avatars'),
+
   // CORS
   CORS_ORIGIN: z.string().default('http://localhost:3001'),
 
@@ -98,6 +109,21 @@ export const env = {
     omdbApiKey: parsed.data.OMDB_API_KEY,
     anthropicApiKey: parsed.data.ANTHROPIC_API_KEY,
   },
+
+  // Google OAuth
+  google: {
+    clientId: parsed.data.GOOGLE_CLIENT_ID,
+  },
+
+  // Email
+  email: {
+    fromAddress: parsed.data.EMAIL_FROM_ADDRESS,
+    fromName: parsed.data.EMAIL_FROM_NAME,
+    sesRegion: parsed.data.AWS_SES_REGION,
+  },
+
+  // Avatar storage
+  avatarS3Bucket: parsed.data.AVATAR_S3_BUCKET,
 
   // CORS
   corsOrigin: parsed.data.CORS_ORIGIN.split(','),

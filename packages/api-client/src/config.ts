@@ -34,6 +34,9 @@ export const API_ENDPOINTS = {
     refresh: '/auth/refresh',
     logout: '/auth/logout',
     me: '/auth/me',
+    googleInitiate: '/auth/google/initiate',
+    googleVerify: '/auth/google/verify',
+    googleResend: '/auth/google/resend',
   },
   content: {
     search: '/content/search',

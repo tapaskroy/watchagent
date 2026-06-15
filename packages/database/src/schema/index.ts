@@ -35,7 +35,8 @@ export const users = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     username: varchar('username', { length: 50 }).notNull().unique(),
     email: varchar('email', { length: 255 }).notNull().unique(),
-    passwordHash: varchar('password_hash', { length: 255 }).notNull(),
+    passwordHash: varchar('password_hash', { length: 255 }), // nullable for Google-only accounts
+    googleId: varchar('google_id', { length: 255 }).unique(),
     fullName: varchar('full_name', { length: 100 }),
     bio: text('bio'),
     avatarUrl: text('avatar_url'),

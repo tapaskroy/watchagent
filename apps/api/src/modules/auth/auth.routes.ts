@@ -1,5 +1,8 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { eq } from 'drizzle-orm';
+import { db, users } from '@watchagent/database';
 import { AuthService } from '../../services/auth/auth.service';
+import { GoogleAuthService } from '../../services/auth/google-auth.service';
 import {
   loginSchema,
   registerSchema,
@@ -10,6 +13,7 @@ import {
 
 export async function authRoutes(app: FastifyInstance) {
   const authService = new AuthService(app);
+  const googleAuthService = new GoogleAuthService(app);
 
   /**
    * POST /api/v1/auth/register
@@ -200,6 +204,109 @@ export async function authRoutes(app: FastifyInstance) {
         success: true,
         message: 'Logged out successfully',
       });
+    }
+  );
+
+  /**
+   * POST /api/v1/auth/google/initiate
+   * Verify Google ID token and send OTP to the associated email
+   */
+  app.post<{ Body: { idToken: string } }>(
+    '/google/initiate',
+    {
+      schema: {
+        description: 'Send OTP to Google-account email',
+        tags: ['auth'],
+        body: {
+          type: 'object',
+          required: ['idToken'],
+          properties: { idToken: { type: 'string' } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { idToken } = request.body;
+      const result = await googleAuthService.initiate(idToken);
+      return reply.send({ success: true, data: result });
+    }
+  );
+
+  /**
+   * POST /api/v1/auth/google/verify
+   * Verify OTP and complete login/register
+   */
+  app.post<{ Body: { idToken: string; code: string; flow?: 'login' | 'register' } }>(
+    '/google/verify',
+    {
+      schema: {
+        description: 'Verify Google OTP and issue JWT tokens',
+        tags: ['auth'],
+        body: {
+          type: 'object',
+          required: ['idToken', 'code'],
+          properties: {
+            idToken: { type: 'string' },
+            code: { type: 'string', minLength: 6, maxLength: 6 },
+            flow: { type: 'string', enum: ['login', 'register'] },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { idToken, code, flow = 'login' } = request.body;
+      const result = await googleAuthService.verify(idToken, code, flow);
+      return reply.send({ success: true, data: result });
+    }
+  );
+
+  /**
+   * POST /api/v1/auth/google/resend
+   * Resend OTP (rate limited to 1 per 60 s)
+   */
+  app.post<{ Body: { idToken: string } }>(
+    '/google/resend',
+    {
+      schema: {
+        description: 'Resend Google OTP',
+        tags: ['auth'],
+        body: {
+          type: 'object',
+          required: ['idToken'],
+          properties: { idToken: { type: 'string' } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { idToken } = request.body;
+      const result = await googleAuthService.resend(idToken);
+      return reply.send({ success: true, data: result });
+    }
+  );
+
+  /**
+   * GET /api/v1/auth/check-username?username=...
+   * Check if a username is available (used by UsernamePrompt)
+   */
+  app.get<{ Querystring: { username: string } }>(
+    '/check-username',
+    {
+      schema: {
+        description: 'Check username availability',
+        tags: ['auth'],
+        querystring: {
+          type: 'object',
+          required: ['username'],
+          properties: { username: { type: 'string' } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { username } = request.query;
+      const user = await db.query.users.findFirst({
+        where: eq(users.username, username),
+        columns: { id: true },
+      });
+      return reply.send({ success: true, data: { available: !user } });
     }
   );
 }

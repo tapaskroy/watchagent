@@ -110,6 +110,15 @@ export class AuthService {
       );
     }
 
+    // Google-only accounts have no password
+    if (!user.passwordHash) {
+      throw new AppError(
+        ApiErrorCode.INVALID_CREDENTIALS,
+        'This account uses Google sign-in. Please use "Login with Google".',
+        HttpStatus.UNAUTHORIZED
+      );
+    }
+
     // Verify password
     const isValidPassword = await bcrypt.compare(data.password, user.passwordHash);
 

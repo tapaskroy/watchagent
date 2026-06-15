@@ -2,10 +2,10 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthInitializer } from '@/components/AuthInitializer';
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  console.log('[Providers] Rendering');
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -20,9 +20,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthInitializer />
-      {children}
-    </QueryClientProvider>
+    <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? ''}>
+      <QueryClientProvider client={queryClient}>
+        <AuthInitializer />
+        {children}
+      </QueryClientProvider>
+    </GoogleOAuthProvider>
   );
 }
