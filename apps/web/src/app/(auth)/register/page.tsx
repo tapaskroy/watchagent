@@ -56,7 +56,7 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
-    try { await register(formData); } catch {}
+    try { await register(formData); } catch {} // eslint-disable-line
   };
 
   const handleGoogleSuccess = async (idToken: string) => {

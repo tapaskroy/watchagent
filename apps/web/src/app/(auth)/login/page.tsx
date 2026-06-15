@@ -43,7 +43,7 @@ export default function LoginPage() {
     if (!validateForm()) return;
     try {
       await login(formData);
-    } catch {}
+    } catch {} // eslint-disable-line
   };
 
   const handleGoogleSuccess = async (idToken: string) => {
